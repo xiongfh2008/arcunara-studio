@@ -1,4 +1,4 @@
-# Arcunara Studio — isolated development environment (v0.2.0 baseline).
+# Arcunara Studio — isolated development environment (v0.3.0).
 #
 # This stack is intentionally separated from the existing VPS v0.2.0 dev
 # deployment (which uses host ports 18088/18089 and its own data/secrets):
@@ -7,18 +7,23 @@
 #   - its own data/ and secrets/ directories next to this file
 # It never touches /opt/arcunara-studio-dev. See docs/deployment.md.
 #
-# Security posture mirrors legacy-v02/compose.yaml exactly:
-# read-only rootfs, non-root user, dropped capabilities, no-new-privileges,
-# tmpfs /tmp, CPU/memory/PID limits, localhost-only port binding, healthcheck.
+# Security posture (same as the validated v0.2.0 baseline):
+# non-root user, read-only rootfs, dropped capabilities, no-new-privileges,
+# tmpfs /tmp, CPU/memory/PID limits, localhost-only port binding,
+# healthcheck. Application code and dependencies are baked into the image
+# (infra/docker/Dockerfile); data and tokens are injected at runtime.
 
 name: arcunara-studio-dev
 
 services:
   api:
-    image: node:24-alpine
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    image: arcunara-studio:0.3.0
     container_name: arcunara-studio-api-dev
     working_dir: /app
-    command: ["node", "server.mjs"]
+    command: ["node", "apps/api/server.mjs"]
 
     user: node
     read_only: true
@@ -29,7 +34,6 @@ services:
       - "127.0.0.1:28089:3001"
 
     volumes:
-      - ../../apps/api/server.mjs:/app/server.mjs:ro
       - ./data:/app/data
       - ./secrets/api_token:/run/secrets/api_token:ro
 
