@@ -6,6 +6,7 @@
 // (see docs/development.md).
 
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
 import { parseMultipartUpload } from "./multipart.mjs";
@@ -20,6 +21,48 @@ const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 const LEGACY_HTML_BYTES = 180000;
 
 export function createApiHandler({ config, store, auth, version }) {
+  // The internal workbench page: static, contains no secrets (the operator
+  // pastes the API token in-page; it is kept in JS memory only). Served
+  // before the /api/ auth gate.
+  let consoleHtml = null;
+
+  try {
+    consoleHtml = readFileSync(
+      new URL("../console.html", import.meta.url),
+      "utf8"
+    );
+  } catch {
+    consoleHtml = null;
+  }
+
+  function serveConsole(req, res) {
+    if (!consoleHtml) {
+      return sendJson(res, 404, { error: "Not Found" });
+    }
+
+    const html = consoleHtml.replace(
+      "__ARCU_PREVIEW_PORT__",
+      String(config.previewPort)
+    );
+
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy":
+        "default-src 'none'; " +
+        "script-src 'unsafe-inline'; " +
+        "style-src 'unsafe-inline'; " +
+        "connect-src 'self'; " +
+        "form-action 'none'; " +
+        "frame-ancestors 'none'; " +
+        "base-uri 'none'"
+    });
+
+    res.end(html);
+  }
+
   return async function handle(req, res) {
     try {
       const pathname = new URL(req.url || "/", "http://localhost").pathname;
@@ -30,6 +73,13 @@ export function createApiHandler({ config, store, auth, version }) {
           service: "arcunara-studio-dev",
           version
         });
+      }
+
+      if (
+        req.method === "GET" &&
+        (pathname === "/console" || pathname === "/console/")
+      ) {
+        return serveConsole(req, res);
       }
 
       if (!pathname.startsWith("/api/") || !auth(req)) {

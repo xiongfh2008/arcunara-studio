@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arcunara Studio · 内部工作台</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2a2f3a;
+    --text: #e6e9ef; --muted: #8b93a3; --accent: #5b8cff; --accent2: #7c5bff;
+    --ok: #3fb97f; --err: #e5484d; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+  }
+  header .spacer { flex: 1; }
+  .tokenbar {
+    display: flex; gap: 8px; align-items: center;
+    padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--panel2);
+  }
+  .tokenbar input[type="password"] {
+    flex: 0 1 420px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font-family: inherit;
+  }
+  button {
+    background: var(--accent); border: none; color: #fff; padding: 8px 14px;
+    border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: var(--err); }
+  main {
+    display: grid; grid-template-columns: 380px 1fr; gap: 16px;
+    padding: 16px 24px; align-items: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  ul.projects { list-style: none; margin: 0; padding: 0; }
+  ul.projects li {
+    padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 8px; cursor: pointer; display: flex; gap: 8px; align-items: baseline;
+  }
+  ul.projects li:hover { border-color: var(--accent); }
+  ul.projects li.active { border-color: var(--accent); background: var(--panel2); }
+  ul.projects .name { font-weight: 600; }
+  ul.projects .meta { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  label.field { display: block; margin-bottom: 10px; }
+  label.field span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  label.field input[type="text"], label.field textarea, label.field input[type="file"] {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font-family: inherit;
+  }
+  label.field textarea { min-height: 84px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 12px; margin-bottom: 12px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; word-break: break-all; }
+  .link { color: var(--accent); cursor: pointer; text-decoration: none; word-break: break-all; }
+  table.versions { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.versions th, table.versions td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.versions th { color: var(--muted); font-weight: 600; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .tag.current { color: var(--ok); border-color: var(--ok); }
+  #feedback:empty { display: none; }
+  #feedback { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; white-space: pre-wrap; }
+  #feedback.ok { background: rgba(63,185,127,.12); border: 1px solid var(--ok); }
+  #feedback.err { background: rgba(229,72,77,.12); border: 1px solid var(--err); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<script>
+  // Injected by the server at serve time (unique placeholder token).
+  window.__PREVIEW_PORT__ = __ARCU_PREVIEW_PORT__;
+</script>
+<header>
+  <h1>Arcunara Studio</h1>
+  <span class="badge">内部测试工作台</span>
+  <span class="spacer"></span>
+  <span class="badge" id="authBadge">未授权</span>
+</header>
+
+<div class="tokenbar">
+  <input type="password" id="tokenInput" placeholder="粘贴 API Token（仅保存在内存中，刷新即失效）" autocomplete="off">
+  <button id="saveToken">连接</button>
+  <span class="hint">Token 不会写入 localStorage / sessionStorage / Cookie，也不会出现在页面源码中。</span>
+</div>
+
+<div id="feedback" class="hidden"></div>
+
+<main>
+  <section>
+    <div class="card" style="margin-bottom:16px">
+      <h2>新建项目</h2>
+      <label class="field"><span>项目名称（必填，≤100 字符）</span>
+        <input type="text" id="newName" maxlength="100">
+      </label>
+      <label class="field"><span>描述（可选）</span>
+        <input type="text" id="newDesc" maxlength="1000">
+      </label>
+      <label class="field"><span>上传 .html / .htm / .zip（≤20 MiB）</span>
+        <input type="file" id="newFile" accept=".html,.htm,.zip">
+      </label>
+      <label class="field"><span>或直接粘贴 HTML（≤180 KB）</span>
+        <textarea id="newHtml" placeholder="&lt;html&gt;...&lt;/html&gt;"></textarea>
+      </label>
+      <div class="row">
+        <button id="createBtn">创建项目</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>项目列表</h2>
+      <ul class="projects" id="projectList"></ul>
+      <div class="row"><button id="refreshBtn" class="ghost">刷新列表</button></div>
+    </div>
+  </section>
+
+  <section id="detailCard" class="card hidden">
+    <h2>项目详情</h2>
+    <dl class="kv" id="detailMeta"></dl>
+    <div class="row" style="margin-bottom:16px">
+      <a id="previewLink" class="link" target="_blank" rel="noopener noreferrer"></a>
+      <button id="copyLink" class="ghost">复制预览链接</button>
+    </div>
+
+    <h2>上传新版本</h2>
+    <div class="row" style="margin-bottom:16px">
+      <input type="file" id="versionFile" accept=".html,.htm,.zip" style="color:var(--text)">
+      <button id="uploadVersionBtn">上传为新版本</button>
+    </div>
+
+    <h2>历史版本</h2>
+    <table class="versions" id="versionTable">
+      <thead><tr><th>版本</th><th>时间</th><th>文件数</th><th>大小</th><th>入口</th><th>状态</th><th></th></tr></thead>
+      <tbody id="versionRows"></tbody>
+    </table>
+    <div class="row" style="margin-top:10px">
+      <button id="rollbackBtn" class="danger">回滚到选中版本</button>
+      <span class="hint">回滚只切换当前版本指针，预览链接不变。</span>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+// Token lives ONLY in this variable — never in storage, never in the DOM.
+let token = null;
+let projects = [];
+let selected = null;
+let versions = [];
+let selectedVersion = null;
+
+const $ = (id) => document.getElementById(id);
+
+// The preview service runs on its own port/origin (see server config).
+function previewUrlFor(id) {
+  const port = window.__PREVIEW_PORT__ || window.location.port;
+  return `${window.location.protocol}//${window.location.hostname}:${port}/p/${id}/`;
+}
+
+function feedback(message, ok) {
+  const el = $("feedback");
+  el.textContent = message;
+  el.className = ok ? "ok" : "err";
+}
+
+function fmtBytes(n) {
+  if (!Number.isFinite(n)) return "-";
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(1)} KiB`;
+  return `${(n / 1048576).toFixed(1)} MiB`;
+}
+
+function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return fetch(path, { ...options, headers }).then(async (res) => {
+    let json = null;
+    try { json = await res.json(); } catch { /* non-JSON */ }
+    if (!res.ok) {
+      const detail = json ? `${json.error}${json.code ? ` [${json.code}]` : ""}` : `HTTP ${res.status}`;
+      throw new Error(detail);
+    }
+    return json;
+  });
+}
+
+function setAuthorized(ok) {
+  $("authBadge").textContent = ok ? "已连接" : "未授权";
+  $("authBadge").style.color = ok ? "var(--ok)" : "var(--muted)";
+}
+
+async function loadProjects() {
+  const data = await api("/api/projects");
+  projects = data.projects;
+  renderProjects();
+}
+
+function renderProjects() {
+  const list = $("projectList");
+  list.textContent = "";
+
+  if (projects.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "暂无项目";
+    li.style.color = "var(--muted)";
+    list.appendChild(li);
+    return;
+  }
+
+  for (const p of projects) {
+    const li = document.createElement("li");
+    if (selected && selected.id === p.id) li.className = "active";
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = p.name;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = `v${p.currentVersion} · ${p.fileCount} 文件 · ${fmtBytes(p.totalSize)}`;
+
+    li.append(name, meta);
+    li.addEventListener("click", () => selectProject(p.id));
+    list.appendChild(li);
+  }
+}
+
+async function selectProject(id) {
+  try {
+    selected = await api(`/api/projects/${id}`);
+    versions = (await api(`/api/projects/${id}/versions`)).versions;
+    selectedVersion = versions.find((v) => v.isCurrent)?.version ?? null;
+    renderDetail();
+    renderProjects();
+  } catch (err) {
+    feedback(`加载失败：${err.message}`, false);
+  }
+}
+
+function kv(label, value) {
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+  const dd = document.createElement("dd");
+  dd.textContent = value;
+  return [dt, dd];
+}
+
+function renderDetail() {
+  $("detailCard").classList.remove("hidden");
+  const meta = $("detailMeta");
+  meta.textContent = "";
+
+  meta.append(...kv("ID", selected.id));
+  meta.append(...kv("名称", selected.name));
+  if (selected.description) meta.append(...kv("描述", selected.description));
+  meta.append(...kv("当前版本", `v${selected.currentVersion}`));
+  meta.append(...kv("入口文件", selected.entryPoint));
+  meta.append(...kv("文件数", String(selected.fileCount)));
+  meta.append(...kv("总大小", fmtBytes(selected.totalSize)));
+  meta.append(...kv("创建时间", selected.createdAt));
+  meta.append(...kv("更新时间", selected.updatedAt));
+
+  const link = $("previewLink");
+  link.textContent = selected.previewPath;
+  link.href = previewUrlFor(selected.id);
+
+  const rows = $("versionRows");
+  rows.textContent = "";
+
+  for (const v of versions) {
+    const tr = document.createElement("tr");
+
+    const cells = [
+      `v${v.version}`,
+      new Date(v.createdAt).toLocaleString(),
+      String(v.fileCount),
+      fmtBytes(v.totalSize),
+      v.entryPoint,
+      v.isCurrent ? "当前" : "-"
+    ];
+    for (const text of cells) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (text === "当前") td.className = "tag current";
+      else if (text === "-") td.className = "tag";
+      tr.appendChild(td);
+    }
+
+    const tdAction = document.createElement("td");
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "versionPick";
+    radio.checked = selectedVersion === v.version;
+    radio.addEventListener("change", () => (selectedVersion = v.version));
+    tdAction.appendChild(radio);
+    tr.appendChild(tdAction);
+
+    rows.appendChild(tr);
+  }
+}
+
+$("saveToken").addEventListener("click", async () => {
+  token = $("tokenInput").value.trim();
+  if (!token) { feedback("请输入 Token", false); return; }
+  try {
+    await loadProjects();
+    setAuthorized(true);
+    feedback(`已连接，共 ${projects.length} 个项目`, true);
+  } catch (err) {
+    token = null;
+    setAuthorized(false);
+    feedback(`连接失败：${err.message}`, false);
+  }
+});
+
+$("refreshBtn").addEventListener("click", async () => {
+  try {
+    await loadProjects();
+    feedback("列表已刷新", true);
+  } catch (err) {
+    feedback(`刷新失败：${err.message}`, false);
+  }
+});
+
+$("createBtn").addEventListener("click", async () => {
+  const name = $("newName").value.trim();
+  const desc = $("newDesc").value.trim();
+  const file = $("newFile").files[0];
+  const html = $("newHtml").value;
+
+  if (!token) { feedback("请先连接 Token", false); return; }
+  if (!name) { feedback("请输入项目名称", false); return; }
+
+  try {
+    let created;
+    if (file) {
+      const fd = new FormData();
+      fd.set("name", name);
+      if (desc) fd.set("description", desc);
+      fd.set("file", file, file.name);
+      created = await api("/api/projects", { method: "POST", body: fd });
+    } else if (html.trim()) {
+      created = await api("/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, description: desc || undefined, html })
+      });
+    } else {
+      feedback("请选择文件或粘贴 HTML", false);
+      return;
+    }
+
+    feedback(`项目已创建：${created.previewPath}`, true);
+    $("newName").value = ""; $("newDesc").value = ""; $("newHtml").value = ""; $("newFile").value = "";
+    await loadProjects();
+    await selectProject(created.id);
+  } catch (err) {
+    feedback(`创建失败：${err.message}`, false);
+  }
+});
+
+$("uploadVersionBtn").addEventListener("click", async () => {
+  if (!selected) { feedback("请先选择项目", false); return; }
+  const file = $("versionFile").files[0];
+  if (!file) { feedback("请选择要上传的文件", false); return; }
+
+  try {
+    const fd = new FormData();
+    fd.set("file", file, file.name);
+    const v = await api(`/api/projects/${selected.id}/versions`, { method: "POST", body: fd });
+    feedback(`已发布 v${v.version}`, true);
+    $("versionFile").value = "";
+    await selectProject(selected.id);
+    await loadProjects();
+  } catch (err) {
+    feedback(`上传失败：${err.message}`, false);
+  }
+});
+
+$("rollbackBtn").addEventListener("click", async () => {
+  if (!selected) { feedback("请先选择项目", false); return; }
+  if (!selectedVersion) { feedback("请先选择目标版本", false); return; }
+
+  try {
+    const r = await api(`/api/projects/${selected.id}/rollback`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: selectedVersion })
+    });
+    feedback(r.rolledBack ? `已回滚到 v${r.currentVersion}，预览链接不变` : `当前已是 v${r.currentVersion}`, true);
+    await selectProject(selected.id);
+    await loadProjects();
+  } catch (err) {
+    feedback(`回滚失败：${err.message}`, false);
+  }
+});
+
+$("copyLink").addEventListener("click", async () => {
+  if (!selected) return;
+  const url = previewUrlFor(selected.id);
+  try {
+    await navigator.clipboard.writeText(url);
+    feedback("预览链接已复制", true);
+  } catch {
+    window.prompt("复制预览链接：", url);
+  }
+});
+
+$("previewLink").addEventListener("click", (e) => {
+  if (selected) {
+    e.preventDefault();
+    window.open(previewUrlFor(selected.id), "_blank", "noopener");
+  }
+});
+</script>
+</body>
+</html>

@@ -62,3 +62,12 @@
 - v0.2.0 兼容：无 versions/ 目录的旧项目按"legacy-root 隐式 v1"读取与服务，根目录文件永不移动/删除；首次更新时记录为 v1 并发布 v2+；可回滚回 legacy 根内容
 - 进程内按项目写锁串行化所有 meta/版本变更，避免竞态
 - 新增 11 个版本管理测试（含 legacy 目录直写模拟）；全量回归 80/80 通过
+
+## 阶段 E-1：轻量内部工作台 — ✅ 已完成
+
+- `GET /console`：自包含单页工作台（零依赖、暗色 SaaS 风格、桌面优先、基础响应式）
+- 功能：Token 内存连接（不写入 localStorage/sessionStorage/Cookie，不出现在源码）、项目列表、
+  新建（multipart 文件或粘贴 HTML）、详情、上传新版本、历史版本、回滚、预览链接复制/打开
+- 安全：页面经 CSP default-src 'none' + frame-ancestors 'none' + form-action 'none' 加固；
+  所有动态内容 textContent 渲染（无 innerHTML 注入面）；预览端口由服务端注入
+- 预览服务不提供 /console；新增 2 个 console 测试；全量 82/82 通过
