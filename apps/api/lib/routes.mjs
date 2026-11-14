@@ -1,15 +1,23 @@
 // API router.
 //
 // v0.2.0 routes (/health, project list, JSON project creation, auth gate)
-// keep their validated behavior; new endpoints are additive. Every failure
-// path returns a JSON error with a stable "code" field (see
-// docs/development.md).
+// keep their validated behavior; everything else is additive v0.3.0.
+// Every failure path returns a JSON error with a stable "code" field
+// (see docs/development.md).
 
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
 import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
+
+const PROJECT_ID = "([0-9a-f-]{36})";
+const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
+const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
+const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
+
+// The legacy JSON html cap — intentionally kept byte-identical with v0.2.0.
+const LEGACY_HTML_BYTES = 180000;
 
 export function createApiHandler({ config, store, auth, version }) {
   return async function handle(req, res) {
@@ -37,9 +45,30 @@ export function createApiHandler({ config, store, auth, version }) {
         return await handleCreateProject(req, res, { config, store });
       }
 
-      const detailMatch = /^\/api\/projects\/([0-9a-f-]{36})$/.exec(pathname);
+      const versionsMatch = VERSIONS_RE.exec(pathname);
 
-      if (req.method === "GET" && detailMatch) {
+      if (versionsMatch) {
+        const id = versionsMatch[1];
+
+        if (req.method === "POST") {
+          return await handleVersionCreate(req, res, { config, store, id });
+        }
+
+        if (req.method === "GET") {
+          const result = await store.listVersions(id);
+          return sendJson(res, 200, result);
+        }
+      }
+
+      const rollbackMatch = ROLLBACK_RE.exec(pathname);
+
+      if (rollbackMatch && req.method === "POST") {
+        return await handleRollback(req, res, { config, store, id: rollbackMatch[1] });
+      }
+
+      const detailMatch = DETAIL_RE.exec(pathname);
+
+      if (detailMatch && req.method === "GET") {
         const view = await store.getProject(detailMatch[1]);
         return sendJson(res, 200, view);
       }
@@ -60,6 +89,42 @@ function cleanDescription(raw, limits) {
   return value.length > 0 ? value : undefined;
 }
 
+async function readJsonPayload(req, limits) {
+  try {
+    return JSON.parse(await readBody(req, limits.maxJsonBodyBytes));
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw err; // 413 passthrough with legacy message
+    }
+    throw new ApiError(400, "Invalid JSON");
+  }
+}
+
+// Stages a legacy-style JSON html payload as a single-file project.
+async function stageJsonHtml(html, store) {
+  const stagedDir = store.stagingDir("new");
+
+  try {
+    await fs.mkdir(stagedDir, { recursive: true, mode: 0o700 });
+    await fs.writeFile(path.join(stagedDir, "index.html"), html, {
+      flag: "wx",
+      mode: 0o600
+    });
+
+    return {
+      stagedDir,
+      stats: {
+        fileCount: 1,
+        totalSize: Buffer.byteLength(html),
+        entryPoint: "index.html"
+      }
+    };
+  } catch (err) {
+    await fs.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
+}
+
 async function handleCreateProject(req, res, { config, store }) {
   const contentType = req.headers["content-type"] || "";
 
@@ -74,57 +139,34 @@ async function handleCreateProject(req, res, { config, store }) {
     });
   }
 
-  let payload;
+  const payload = await readJsonPayload(req, config.limits);
 
-  try {
-    payload = JSON.parse(
-      await readBody(req, config.limits.maxJsonBodyBytes)
-    );
-  } catch (err) {
-    if (err instanceof ApiError) {
-      return sendError(res, err); // 413 passthrough with legacy message
-    }
-    return sendJson(res, 400, { error: "Invalid JSON" });
-  }
-
-  const name =
-    typeof payload.name === "string" ? payload.name.trim() : "";
-
+  const name = typeof payload.name === "string" ? payload.name.trim() : "";
   const html = typeof payload.html === "string" ? payload.html : "";
 
   if (
     !name ||
     name.length > 100 ||
     !html.toLowerCase().includes("<html") ||
-    Buffer.byteLength(html) > 180000
+    Buffer.byteLength(html) > LEGACY_HTML_BYTES
   ) {
     return sendJson(res, 400, { error: "Invalid name or HTML" });
   }
 
   const description = cleanDescription(payload.description, config.limits);
-  const stagedDir = store.stagingDir("new");
+  const staged = await stageJsonHtml(html, store);
 
   try {
-    await fs.mkdir(stagedDir, { recursive: true, mode: 0o700 });
-    await fs.writeFile(path.join(stagedDir, "index.html"), html, {
-      flag: "wx",
-      mode: 0o600
-    });
-
     const view = await store.createProject({
       name,
       description,
-      stagedDir,
-      stats: {
-        fileCount: 1,
-        totalSize: Buffer.byteLength(html),
-        entryPoint: "index.html"
-      }
+      stagedDir: staged.stagedDir,
+      stats: staged.stats
     });
 
     return sendJson(res, 201, view);
   } catch (err) {
-    await fs.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(staged.stagedDir, { recursive: true, force: true }).catch(() => {});
     throw err;
   }
 }
@@ -173,4 +215,81 @@ async function handleMultipartCreate(req, res, { config, store }) {
     await fs.rm(file.tmpPath, { force: true }).catch(() => {});
     throw err;
   }
+}
+
+// v0.3.0: upload a new version (multipart file or legacy JSON html).
+// Failure at any validation stage never changes the current version.
+async function handleVersionCreate(req, res, { config, store, id }) {
+  const meta = await store.readRawMeta(id);
+
+  if (!meta) {
+    throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+  }
+
+  const contentType = req.headers["content-type"] || "";
+
+  if (contentType.startsWith("multipart/form-data")) {
+    const { fields: _fields, file } = await parseMultipartUpload(req, {
+      tmpDir: store.tmpDir,
+      limits: config.limits
+    });
+
+    try {
+      const staged = await stageFromUpload(file, { store, limits: config.limits });
+
+      try {
+        const view = await store.addVersion(id, staged);
+        return sendJson(res, 201, view);
+      } catch (err) {
+        await fs.rm(staged.stagedDir, { recursive: true, force: true }).catch(() => {});
+        throw err;
+      }
+    } catch (err) {
+      await fs.rm(file.tmpPath, { force: true }).catch(() => {});
+      throw err;
+    }
+  }
+
+  if (contentType.startsWith("application/json")) {
+    const payload = await readJsonPayload(req, config.limits);
+    const html = typeof payload.html === "string" ? payload.html : "";
+
+    if (
+      !html.toLowerCase().includes("<html") ||
+      Buffer.byteLength(html) > LEGACY_HTML_BYTES
+    ) {
+      throw new ApiError(400, "Invalid HTML payload", "INVALID_HTML");
+    }
+
+    const staged = await stageJsonHtml(html, store);
+
+    try {
+      const view = await store.addVersion(id, staged);
+      return sendJson(res, 201, view);
+    } catch (err) {
+      await fs.rm(staged.stagedDir, { recursive: true, force: true }).catch(() => {});
+      throw err;
+    }
+  }
+
+  return sendJson(res, 415, {
+    error: "Use application/json or multipart/form-data",
+    code: "UNSUPPORTED_MEDIA_TYPE"
+  });
+}
+
+async function handleRollback(req, res, { config, store, id }) {
+  const payload = await readJsonPayload(req, config.limits);
+  const target = payload.version;
+
+  if (!Number.isInteger(target) || target < 1) {
+    throw new ApiError(
+      400,
+      "Version must be a positive integer",
+      "INVALID_VERSION"
+    );
+  }
+
+  const result = await store.rollback(id, target);
+  return sendJson(res, 200, result);
 }

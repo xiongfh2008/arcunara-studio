@@ -256,6 +256,137 @@ export function createStore(config) {
     return getProject(id);
   }
 
+  // Publishes a fully validated staging directory as the next version.
+  // Legacy v0.2.0 projects are transparently recorded: their root files
+  // become version 1 (storage: "legacy-root"), untouched on disk.
+  async function addVersion(id, { stagedDir, stats }) {
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      const versions = isLegacy(meta)
+        ? [await currentVersionEntry(id, meta)]
+        : [...meta.versions];
+
+      const next = versions.reduce((m, v) => Math.max(m, v.version), 0) + 1;
+      const createdAt = now();
+
+      await fs.mkdir(versionsDir(id), { recursive: true, mode: 0o700 });
+      await fs.rename(stagedDir, versionDir(id, next));
+
+      versions.push({
+        version: next,
+        createdAt,
+        fileCount: stats.fileCount,
+        totalSize: stats.totalSize,
+        entryPoint: stats.entryPoint,
+        storage: "versions"
+      });
+
+      meta.versions = versions;
+      meta.currentVersion = next;
+      meta.updatedAt = createdAt;
+
+      try {
+        await writeMetaAtomic(id, meta);
+      } catch (err) {
+        // Orphaned version directory: not referenced by meta, never listed.
+        await fs.rm(versionDir(id, next), { recursive: true, force: true });
+        throw err;
+      }
+
+      return {
+        projectId: id,
+        version: next,
+        createdAt,
+        fileCount: stats.fileCount,
+        totalSize: stats.totalSize,
+        entryPoint: stats.entryPoint,
+        previewPath: `/p/${id}/`,
+        currentVersion: next
+      };
+    });
+  }
+
+  async function listVersions(id) {
+    const meta = await readRawMeta(id);
+
+    if (!meta) {
+      throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+    }
+
+    const versions = isLegacy(meta)
+      ? [await currentVersionEntry(id, meta)]
+      : meta.versions;
+
+    return {
+      projectId: id,
+      versions: [...versions]
+        .sort((a, b) => a.version - b.version)
+        .map((v) => ({
+          version: v.version,
+          createdAt: v.createdAt,
+          fileCount: v.fileCount,
+          totalSize: v.totalSize,
+          entryPoint: v.entryPoint,
+          isCurrent: v.version === (meta.currentVersion ?? versions[versions.length - 1].version)
+        }))
+    };
+  }
+
+  async function rollback(id, targetVersion) {
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      const versions = isLegacy(meta)
+        ? [await currentVersionEntry(id, meta)]
+        : meta.versions;
+
+      const target = versions.find((v) => v.version === targetVersion);
+
+      if (!target) {
+        throw new ApiError(
+          400,
+          `Version ${targetVersion} does not exist`,
+          "VERSION_NOT_FOUND"
+        );
+      }
+
+      const currentVersion =
+        meta.currentVersion ?? versions[versions.length - 1].version;
+
+      if (target.version === currentVersion) {
+        return {
+          projectId: id,
+          ok: true,
+          rolledBack: false,
+          currentVersion,
+          previewPath: `/p/${id}/`
+        };
+      }
+
+      meta.currentVersion = target.version;
+      meta.updatedAt = now();
+
+      await writeMetaAtomic(id, meta);
+
+      return {
+        projectId: id,
+        ok: true,
+        rolledBack: true,
+        currentVersion: target.version,
+        previewPath: `/p/${id}/`
+      };
+    });
+  }
+
   return {
     root,
     tmpDir,
@@ -270,6 +401,9 @@ export function createStore(config) {
     versionDir,
     listProjects,
     getProject,
-    createProject
+    createProject,
+    addVersion,
+    listVersions,
+    rollback
   };
 }

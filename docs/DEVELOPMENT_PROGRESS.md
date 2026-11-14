@@ -52,3 +52,13 @@
 - CSP sandbox（opaque origin）+ 'self' 子资源 + data: URI；外部网络请求/插件/base 劫持/Service Worker 阻止；nosniff/no-store/no-referrer
 - `/p/{id}` → `/p/{id}/` 302 规范化；entry ≠ index.html 时 302 到入口页；HEAD 支持；目录列表不提供
 - 新增 11 个预览测试（含 raw socket 穿越测试）
+
+## 阶段 D：版本管理与旧数据兼容 — ✅ 已完成
+
+- `POST /api/projects/{id}/versions`：multipart 文件或 JSON html 上传新版本，验证全程在 staging 完成
+- `GET /api/projects/{id}/versions`：版本历史（version/createdAt/fileCount/totalSize/entryPoint/isCurrent）
+- `POST /api/projects/{id}/rollback`：原子切换 currentVersion（meta.json 临时文件 + rename），幂等（重复回滚返回 rolledBack:false）
+- 固定预览链接：/p/{id}/ 永远指向 currentVersion；回滚后内容立即跟随
+- v0.2.0 兼容：无 versions/ 目录的旧项目按"legacy-root 隐式 v1"读取与服务，根目录文件永不移动/删除；首次更新时记录为 v1 并发布 v2+；可回滚回 legacy 根内容
+- 进程内按项目写锁串行化所有 meta/版本变更，避免竞态
+- 新增 11 个版本管理测试（含 legacy 目录直写模拟）；全量回归 80/80 通过
