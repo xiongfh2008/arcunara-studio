@@ -3,15 +3,21 @@
 
 import path from "node:path";
 
+// Windows reserved device names (case-insensitive, with or without
+// extension) are rejected — they can alias hardware devices on Windows.
+const WINDOWS_RESERVED =
+  /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i;
+
 // A segment is valid when it can be joined under a controlled root without
 // any chance of traversal, aliasing, or filesystem trickery:
 // - no "." / ".." (traversal)
 // - no "/" or "\" (separators; backslash also blocks Windows-style confusion)
 // - no control characters or NUL
 // - no ":" (Windows drive letters, NTFS alternate data streams)
+// - at most 255 UTF-8 bytes and no Windows reserved device name
 export function isValidSegment(segment, { allowDotfiles = true } = {}) {
   if (typeof segment !== "string" || segment.length === 0) return false;
-  if (segment.length > 255) return false;
+  if (Buffer.byteLength(segment, "utf8") > 255) return false;
   if (segment === "." || segment === "..") return false;
   if (segment.includes("/") || segment.includes("\\")) return false;
 
@@ -22,6 +28,7 @@ export function isValidSegment(segment, { allowDotfiles = true } = {}) {
 
   if (segment.includes(":")) return false;
   if (!allowDotfiles && segment.startsWith(".")) return false;
+  if (WINDOWS_RESERVED.test(segment)) return false;
 
   return true;
 }

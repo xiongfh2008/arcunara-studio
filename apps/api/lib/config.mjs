@@ -57,12 +57,6 @@ export function loadConfig(env = process.env) {
     maxUploadBodyBytes: intFromEnv(env, "ARCU_MAX_UPLOAD_BODY_BYTES", 24 * MIB)
   };
 
-  if (limits.maxUploadBodyBytes < limits.maxZipBytes) {
-    throw new Error(
-      "ARCU_MAX_UPLOAD_BODY_BYTES must be >= ARCU_MAX_ZIP_BYTES"
-    );
-  }
-
   return {
     store: env.ARCU_DATA_DIR || "/app/data",
     token,

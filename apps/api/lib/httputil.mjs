@@ -3,8 +3,8 @@
 // an additive machine-readable field for v0.3.0 clients.
 
 export class ApiError extends Error {
-  constructor(status, message, code = undefined) {
-    super(message);
+  constructor(status, message, code = undefined, cause = undefined) {
+    super(message, cause !== undefined ? { cause } : undefined);
     this.status = status;
     this.code = code;
   }
@@ -24,6 +24,10 @@ export function sendError(res, err) {
   if (!(err instanceof ApiError)) {
     console.error("API error:", err && err.message ? err.message : err);
     err = new ApiError(500, "Internal error");
+  }
+
+  if (err.cause !== undefined) {
+    console.error("API error cause:", err.cause.message ?? err.cause);
   }
 
   const body =

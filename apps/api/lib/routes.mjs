@@ -8,6 +8,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
+import { parseMultipartUpload } from "./multipart.mjs";
+import { stageFromUpload } from "./staging.mjs";
 
 export function createApiHandler({ config, store, auth, version }) {
   return async function handle(req, res) {
@@ -61,8 +63,11 @@ function cleanDescription(raw, limits) {
 async function handleCreateProject(req, res, { config, store }) {
   const contentType = req.headers["content-type"] || "";
 
+  if (contentType.startsWith("multipart/form-data")) {
+    return await handleMultipartCreate(req, res, { config, store });
+  }
+
   if (!contentType.startsWith("application/json")) {
-    // multipart/form-data is added by the v0.3.0 upload engine (Phase B).
     return sendJson(res, 415, {
       error: "Use application/json or multipart/form-data",
       code: "UNSUPPORTED_MEDIA_TYPE"
@@ -120,6 +125,52 @@ async function handleCreateProject(req, res, { config, store }) {
     return sendJson(res, 201, view);
   } catch (err) {
     await fs.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
+}
+
+// v0.3.0: multipart upload of a single .html/.htm/.zip file.
+async function handleMultipartCreate(req, res, { config, store }) {
+  const { fields, file } = await parseMultipartUpload(req, {
+    tmpDir: store.tmpDir,
+    limits: config.limits
+  });
+
+  try {
+    const name = typeof fields.name === "string" ? fields.name.trim() : "";
+
+    if (!name) {
+      throw new ApiError(400, "Name is required", "NAME_REQUIRED");
+    }
+
+    if (name.length > 100) {
+      throw new ApiError(
+        400,
+        "Name is too long (max 100 characters)",
+        "NAME_TOO_LONG"
+      );
+    }
+
+    const description = cleanDescription(fields.description, config.limits);
+    const staged = await stageFromUpload(file, { store, limits: config.limits });
+
+    try {
+      const view = await store.createProject({
+        name,
+        description,
+        stagedDir: staged.stagedDir,
+        stats: staged.stats
+      });
+
+      return sendJson(res, 201, view);
+    } catch (err) {
+      await fs.rm(staged.stagedDir, { recursive: true, force: true }).catch(() => {});
+      throw err;
+    }
+  } catch (err) {
+    // The parsed upload temp file belongs to this handler until staging
+    // moves it; make sure route-level failures never leak it.
+    await fs.rm(file.tmpPath, { force: true }).catch(() => {});
     throw err;
   }
 }
