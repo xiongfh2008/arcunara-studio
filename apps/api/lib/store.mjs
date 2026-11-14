@@ -218,7 +218,9 @@ export function createStore(config) {
     }
 
     const dir = projectDir(id);
-    await fs.rename(stagedDir, dir); // atomic publish within the same volume
+
+    // Publish atomically: staged content becomes versions/1, meta follows.
+    await fs.mkdir(versionsDir(id), { recursive: true, mode: 0o700 });
 
     const createdAt = now();
     const meta = {
@@ -244,6 +246,7 @@ export function createStore(config) {
     }
 
     try {
+      await fs.rename(stagedDir, versionDir(id, 1)); // same-volume atomic move
       await writeMetaAtomic(id, meta);
     } catch (err) {
       await fs.rm(dir, { recursive: true, force: true });

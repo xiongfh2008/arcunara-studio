@@ -63,7 +63,7 @@ test("creates a project from a multipart HTML file", async () => {
   assert.equal(r.json.previewPath, `/p/${r.json.id}/`);
 
   const stored = await fs.readFile(
-    path.join(server.dataDir, r.json.id, "index.html"),
+    path.join(server.dataDir, r.json.id, "versions", "1", "index.html"),
     "utf8"
   );
   assert.equal(stored, INDEX_HTML);
@@ -85,7 +85,7 @@ test("creates a multi-file project from a ZIP", async () => {
   assert.equal(r.json.entryPoint, "index.html");
   assert.equal(r.json.fileCount, 6);
 
-  const dir = path.join(server.dataDir, r.json.id);
+  const dir = path.join(server.dataDir, r.json.id, "versions", "1");
   assert.equal(await fs.readFile(path.join(dir, "css", "style.css"), "utf8"), "body { color: #222; }");
   assert.equal(await fs.readFile(path.join(dir, "js", "app.js"), "utf8"), "console.log('ok');");
   assert.ok((await fs.stat(path.join(dir, "images", "logo.png"))).isFile());
@@ -120,7 +120,7 @@ test("re-roots a single wrapper directory containing index.html", async () => {
   assert.equal(r.status, 201);
   assert.equal(r.json.entryPoint, "index.html");
 
-  const dir = path.join(server.dataDir, r.json.id);
+  const dir = path.join(server.dataDir, r.json.id, "versions", "1");
   assert.equal(await fs.readFile(path.join(dir, "index.html"), "utf8"), INDEX_HTML);
   assert.equal(await fs.readFile(path.join(dir, "css", "style.css"), "utf8"), "body{}");
   await assert.rejects(fs.stat(path.join(dir, "prototype")));

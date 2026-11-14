@@ -35,3 +35,20 @@
 **遗留问题**：无
 
 **下一阶段**：阶段 B — multipart/ZIP 上传引擎（含 ZIP 安全校验与入口识别）
+
+## 阶段 B：HTML/ZIP 上传引擎 — ✅ 已完成（commit 4fecc47）
+
+- 流式 multipart 解析（busboy）：总量/单文件 ZIP 20MiB / HTML 2MiB 限额在传输中生效，单文件规则
+- 安全 ZIP 解压（yauzl，strictFileNames）：Zip Slip / 绝对路径 / 反斜杠 / NUL / 控制字符 / 保留设备名拒绝；符号链接与非常规条目拒绝；加密条目拒绝；条目数、单条目、HTML、总解压量限额实时生效；重复/大小写/Unicode 规范化碰撞拒绝；CRC 与 size 校验
+- 入口识别：根 index.html > 单一包装目录重定位 > 单 HTML 文件；歧义归档明确报错
+- 原子发布：staging 目录 rename 至 versions/1 后写 meta；失败全量清理（含中断请求的排空）
+- 限额可经 ARCU_MAX_* 环境变量调整
+- 新增 36 个上传/ZIP 安全测试；关键修复：yauzl close() 无回调导致的挂起、mid-stream 失败的 fd 释放与请求排空、路由级失败临时文件清理
+
+## 阶段 C：完整静态预览引擎 — ✅ 已完成
+
+- 多文件静态服务：HTML/CSS/JS/图片/字体/JSON/文本/音视频，MIME 白名单（未知扩展名 404）
+- 路径安全：逐段解码+校验、原始请求点段拒绝（fetch 规范化前的防护）、点文件与 meta.json 永不服务、逐级 lstat 符号链接检查、safeJoin 双重包含校验
+- CSP sandbox（opaque origin）+ 'self' 子资源 + data: URI；外部网络请求/插件/base 劫持/Service Worker 阻止；nosniff/no-store/no-referrer
+- `/p/{id}` → `/p/{id}/` 302 规范化；entry ≠ index.html 时 302 到入口页；HEAD 支持；目录列表不提供
+- 新增 11 个预览测试（含 raw socket 穿越测试）

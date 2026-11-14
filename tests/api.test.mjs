@@ -258,8 +258,9 @@ test("preview serves the stored HTML with sandbox headers", async () => {
 });
 
 test("persisted files match the created project", async () => {
+  const versionDir = path.join(server.dataDir, createdA.id, "versions", "1");
   const storedHtml = await fs.readFile(
-    path.join(server.dataDir, createdA.id, "index.html"),
+    path.join(versionDir, "index.html"),
     "utf8"
   );
   assert.equal(storedHtml, HTML_A);

@@ -34,7 +34,14 @@ async function stageZip(file, { store, limits }) {
     const { entryPoint } = await detectAndRerootEntry(stagedDir);
     await rmQuiet(file.tmpPath);
 
-    return { stagedDir, stats: { ...stats, entryPoint } };
+    return {
+      stagedDir,
+      stats: {
+        fileCount: stats.fileCount,
+        totalSize: stats.totalBytes,
+        entryPoint
+      }
+    };
   } catch (err) {
     await rmQuiet(stagedDir);
     await rmQuiet(file.tmpPath);
