@@ -69,7 +69,8 @@ const BASE_HEADERS = {
     "connect-src 'self'; " +
     "media-src 'self' data:; " +
     "object-src 'none'; " +
-    "base-uri 'none'"
+    "base-uri 'none'; " +
+    "form-action 'self'"
 };
 
 function notFound(res) {

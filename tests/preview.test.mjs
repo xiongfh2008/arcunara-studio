@@ -108,6 +108,7 @@ test("serves the entry page with sandbox CSP and nosniff", async () => {
   assert.match(csp, /img-src 'self' data:/);
   assert.match(csp, /object-src 'none'/);
   assert.match(csp, /base-uri 'none'/);
+  assert.match(csp, /form-action 'self'/);
 
   assert.equal(await res.text(), INDEX_HTML);
 });

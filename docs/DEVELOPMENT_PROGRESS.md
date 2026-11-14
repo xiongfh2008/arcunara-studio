@@ -71,3 +71,28 @@
 - 安全：页面经 CSP default-src 'none' + frame-ancestors 'none' + form-action 'none' 加固；
   所有动态内容 textContent 渲染（无 innerHTML 注入面）；预览端口由服务端注入
 - 预览服务不提供 /console；新增 2 个 console 测试；全量 82/82 通过
+
+## 阶段 E-2：Docker / CI — ✅ 已完成（commit 9d940c2）
+
+- `infra/docker/Dockerfile`：node:24-alpine，`npm ci --omit=dev` 依赖烘焙，非 root，无密钥/数据入镜像
+- compose 改为镜像构建（不再 bind-mount 源码）；运行时安全姿态与 v0.2.0 完全一致
+- CI 增加 `npm ci`（含 npm 缓存）
+- **本地 Docker 验收真实执行**：镜像构建 → compose up → health v0.3.0 → 无 Token 401 → ZIP multipart 创建（含 description）→ 预览 200 + CSP → CSS 资源 MIME → rollback 端点 → /console 200 → down 清理
+
+## 阶段 E-3：浏览器端到端验证 — ✅ 已完成（真实 Chromium）
+
+- 通过 ZCode 内置 Chromium 完成端到端验证（非 HTTP-200 代替）：
+  - 工作台：页面渲染、Token 内存连接、项目列表
+  - 预览：外部 CSS 真实生效（computed style：文字色 rgb(29,78,216)、居中、背景 rgb(238,242,255)）
+  - 外部 JS 真实执行（load 事件改写标题 "[JS loaded]"；onclick → 函数执行 → DOM 更新 + 类切换 + 颜色变化 rgb(21,128,61)）
+  - 图片真实解码（naturalWidth > 0，1x1 PNG）
+  - 页面导航：相对链接 → page2.html → 返回；URL/标题/内容全部验证
+  - 截图视觉确认；CSP sandbox 下脚本正常执行
+- 过程中发现并修正测试夹具缺陷（fixture 按钮漏写 onclick —— 产品行为正常）
+- 诚实记录：仓库内**未**包含 Playwright 自动化测试（未安装依赖与浏览器二进制）；CI 目前仅 lint + 集成测试
+
+## 阶段 E-4：安全收尾与文档 — ✅ 已完成
+
+- 预览 CSP 增加 `form-action 'self'`（阻止表单提交跳转外部站点）
+- 新增 `docs/KNOWN_LIMITATIONS.md`（上传限制、预览隔离边界、公网部署前置条件）
+- 更新 README、development.md（完整 API 规范）、deployment.md（Dockerfile 流程、v0.2.0 兼容与回滚）、.env.example
