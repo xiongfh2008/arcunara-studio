@@ -1,0 +1,60 @@
+# Arcunara Studio — isolated development environment (v0.2.0 baseline).
+#
+# This stack is intentionally separated from the existing VPS v0.2.0 dev
+# deployment (which uses host ports 18088/18089 and its own data/secrets):
+#   - dedicated compose project name and container name
+#   - host ports 28088/28089 (also bound to 127.0.0.1 only)
+#   - its own data/ and secrets/ directories next to this file
+# It never touches /opt/arcunara-studio-dev. See docs/deployment.md.
+#
+# Security posture mirrors legacy-v02/compose.yaml exactly:
+# read-only rootfs, non-root user, dropped capabilities, no-new-privileges,
+# tmpfs /tmp, CPU/memory/PID limits, localhost-only port binding, healthcheck.
+
+name: arcunara-studio-dev
+
+services:
+  api:
+    image: node:24-alpine
+    container_name: arcunara-studio-api-dev
+    working_dir: /app
+    command: ["node", "server.mjs"]
+
+    user: node
+    read_only: true
+
+    ports:
+      # Deliberately different from the existing deployment (18088/18089).
+      - "127.0.0.1:28088:3000"
+      - "127.0.0.1:28089:3001"
+
+    volumes:
+      - ../../apps/api/server.mjs:/app/server.mjs:ro
+      - ./data:/app/data
+      - ./secrets/api_token:/run/secrets/api_token:ro
+
+    tmpfs:
+      - /tmp
+
+    cpus: 0.30
+    mem_limit: 192m
+    pids_limit: 64
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped

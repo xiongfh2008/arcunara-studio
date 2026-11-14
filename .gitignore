@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets (real .env and token files must never be committed)
+.env
+.env.*
+!.env.example
+secrets/
+
+# Runtime data: uploaded projects, local test data, databases
+data/
+
+# Logs, temp files, build/test artifacts
+*.log
+tmp/
+dist/
+coverage/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
