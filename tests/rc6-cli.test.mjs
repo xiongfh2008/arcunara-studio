@@ -220,7 +220,7 @@ test("deploy refuses to follow symbolic links", async () => {
 
   const r = await runCli(["deploy", dir], { env: deployKeyEnv() });
   assert.notEqual(r.code, 0);
-  assert.ok(r.stderr.includes("符号链接"), r.stderr);
+  assert.match(r.stderr, /符号链接|symbolic link/, r.stderr);
 });
 
 test("deploy a prebuilt ZIP file works", async () => {
