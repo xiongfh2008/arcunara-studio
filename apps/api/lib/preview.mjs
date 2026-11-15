@@ -82,8 +82,11 @@ const BASE_HEADERS = {
 // Platform-provided safe-preview navigation page for Axure exports. It is
 // PLATFORM UI but still served on the untrusted preview origin, so it is
 // sandboxed like every other preview document (opaque origin, no
-// same-origin privileges) and contains no secrets. frame-src 'self' covers
-// only the preview iframe of pages from the same project version.
+// same-origin privileges) and contains no secrets. frame-src 'self' means
+// "same origin as the preview server" — it is NOT scoped to a single
+// project UUID; the project scoping comes from the code, which only ever
+// assigns iframe URLs from this project's own rendered page list (and
+// sandboxed frames cannot read cross-project responses regardless).
 const NAV_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
   "Cache-Control": "no-store",

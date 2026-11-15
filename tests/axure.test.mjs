@@ -10,6 +10,7 @@ import {
   businessPages,
   inspectAxureProject,
   isAxureFileSet,
+  matchNavHash,
   renderNavPage
 } from "../apps/api/lib/axure.mjs";
 
@@ -217,14 +218,77 @@ test("raw native entry (index.html) is preserved", async () => {
   assert.match(await res.text(), /Axure player shell/);
 });
 
-test("non-Axure projects keep the RC2 preview entry", async () => {
+test("non-Axure projects keep the RC2 preview entry and CSP", async () => {
   const res = await server.preview(`/p/${plainId}/`);
+
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get("content-security-policy"), res.headers.get("content-security-policy"));
   assert.match(await res.text(), /plain prototype/);
 
   const detail = await server.api(`/api/projects/${plainId}`);
   assert.equal(detail.json.isAxure, false);
+
+  // RC2 page CSP preserved verbatim — no RC3 relaxation for plain projects:
+  // no allow-same-origin, no unsafe-eval, no connect-src *, no frame-src.
+  const csp = res.headers.get("content-security-policy");
+  assert.match(csp, /sandbox allow-scripts allow-forms/);
+  assert.match(csp, /default-src 'none'/);
+  assert.ok(!csp.includes("allow-same-origin"), "no allow-same-origin");
+  assert.ok(!csp.includes("unsafe-eval"), "no unsafe-eval");
+  assert.ok(!/connect-src \*/.test(csp), "no wildcard connect-src");
+  assert.ok(!/frame-src/.test(csp), "plain pages keep no frame-src");
+});
+
+test("Axure raw business pages use the standard page CSP", async () => {
+  const encoded = encodeURIComponent("付款人名称管理（新增）.html");
+  const res = await server.preview(`/p/${axureId}/${encoded}`);
+
+  assert.equal(res.status, 200);
+  const csp = res.headers.get("content-security-policy");
+  assert.match(csp, /sandbox allow-scripts allow-forms/);
+  assert.match(csp, /script-src 'self' 'unsafe-inline'/);
+  assert.ok(!csp.includes("allow-same-origin"));
+  assert.ok(!csp.includes("unsafe-eval"));
+});
+
+test("Axure navigation page uses its own sandboxed CSP", async () => {
+  const { csp } = await nav();
+
+  assert.match(csp, /sandbox allow-scripts(?! allow-forms)/); // narrower sandbox than pages
+  assert.match(csp, /frame-src 'self'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.ok(!csp.includes("allow-same-origin"));
+  assert.ok(!csp.includes("unsafe-eval"));
+  assert.ok(!/connect-src \*/.test(csp));
+});
+
+// --- deep-link matching (the exact function embedded in the nav page) ------
+
+test("matchNavHash matches raw-encoded, decoded and %-fidelity hashes", () => {
+  const pages = [
+    { name: "付款人名称管理（新增）", href: `/p/x/${encodeURIComponent("付款人名称管理（新增）.html")}` },
+    { name: "z-fidelity", href: `/p/x/${encodeURIComponent("z%41.html")}` }
+  ];
+
+  // raw fragment as stored by replaceState("#" + href) — exact match
+  assert.equal(matchNavHash(pages, pages[0].href), 0);
+  // a tool re-encoded the fragment — decoded comparison still finds it
+  assert.equal(matchNavHash(pages, decodeURIComponent(pages[0].href)), 0);
+  // %41 must survive as literal "%41" (no accidental decode to "A"): the
+  // double-encoded href only matches RAW; a once-decoded fragment decodes
+  // to "zA.html" which is correctly NOT matched (falls back to page 0)
+  assert.equal(matchNavHash(pages, pages[1].href), 1);
+  assert.equal(matchNavHash(pages, decodeURIComponent(pages[1].href)), 0);
+});
+
+test("matchNavHash never throws on malformed hashes and never opens unlisted files", () => {
+  const pages = [{ name: "only", href: "/p/x/only.html" }];
+
+  assert.equal(matchNavHash(pages, ""), 0);
+  assert.equal(matchNavHash(pages, undefined), 0);
+  assert.equal(matchNavHash(pages, "%zz%fe"), 0); // malformed % sequence — no throw
+  assert.equal(matchNavHash(pages, "/p/x/../meta.json"), 0); // unlisted → page 0
+  assert.equal(matchNavHash(pages, "/p/x/only.html%00"), 0);
+  assert.equal(matchNavHash(pages, "javascript:alert(1)"), 0);
 });
 
 test("version update and rollback keep the page list consistent", async () => {

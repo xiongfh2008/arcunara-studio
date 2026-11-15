@@ -70,6 +70,42 @@ function encodePreviewPath(id, page) {
   return `/p/${id}/${page.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+// Resolves a location.hash fragment (without "#") to an index in the page
+// list. Exported AND embedded verbatim into the navigation page via
+// Function.prototype.toString(), so the unit-tested logic is exactly what
+// the browser runs.
+//
+// The hash was written by history.replaceState("#" + item.href) where
+// item.href is already percent-encoded — so the RAW fragment must match
+// first. A decoded comparison is kept as a fallback for agents that
+// re-encode the fragment differently (browsers/tools may normalize).
+// Unknown, malformed (bad "%" sequences), or unlisted hashes resolve to
+// page 0 — a hash can never open a file outside the page list, because the
+// iframe src is only ever taken from PAGES, never from the hash itself.
+export function matchNavHash(pages, rawHash) {
+  if (typeof rawHash !== "string" || rawHash === "") {
+    return 0;
+  }
+
+  const candidates = [rawHash];
+
+  try {
+    candidates.push(decodeURIComponent(rawHash));
+  } catch (e) {
+    // malformed "%..." sequences — the raw form is still tried above
+  }
+
+  for (let c = 0; c < candidates.length; c++) {
+    for (let i = 0; i < pages.length; i++) {
+      if (pages[i].href === candidates[c]) {
+        return i;
+      }
+    }
+  }
+
+  return 0;
+}
+
 // Server-rendered navigation page: directory sidebar + sandboxed preview
 // iframe. Rendered names go through JSON + textContent; no user HTML is
 // ever injected into this platform page.
@@ -133,6 +169,8 @@ export function renderNavPage(id, pages) {
   // Server-injected page list: JSON with "<" escaped; rendered via
   // textContent only — uploaded file names can never inject markup.
   var PAGES = ${payload};
+  // Same function that is unit-tested server-side (embedded verbatim).
+  var matchNavHash = ${matchNavHash.toString()};
   var list = document.getElementById("list");
   var view = document.getElementById("view");
   var current = document.getElementById("current");
@@ -162,10 +200,9 @@ export function renderNavPage(id, pages) {
     list.appendChild(b);
   });
 
-  // Deep link: /p/{id}/#<encoded href>
-  var hash = decodeURIComponent((location.hash || "").slice(1));
-  var start = PAGES.findIndex(function (p) { return p.href === hash; });
-  select(start >= 0 ? start : 0);
+  // Deep link: /p/{id}/#<encoded href> — raw and decoded forms are both
+  // matched against the page list; anything else falls back to page 0.
+  select(matchNavHash(PAGES, (location.hash || "").slice(1)));
 </script>
 </body>
 </html>

@@ -98,7 +98,7 @@
 | 站点地图面板为空 | 站点地图数据经相对 XHR/初始化流程加载，opaque origin 下 `connect-src 'self'` 不匹配任何目标 → 请求被阻 | 无（同上） | 同上 | ❌ 不纳入 |
 | 本地实验佐证 | 临时 `allow-same-origin`（仅本地、已完整还原）使 sitemap 面板恢复可见 → 证实根因是 origin 隔离；但 mainFrame 仍空白（还存在 XHR/驱动链路问题） | — | — | 实验性证据，不部署 |
 | frame_ant.js / 播放器 localStorage SecurityError | opaque origin 下 `localStorage` 属性访问即抛 SecurityError（RC1 探测已证实） | 无（需 allow-same-origin 或注入 shim；注入违反"不修改上传内容"） | 同上 | ❌ 不纳入 |
-| frame-src 缺失 | RC3 前未显式声明 frame-src；实测同源 iframe 在 default-src 回退下仍可加载；播放器空白与 frame-src 无关 | 导航页显式 `frame-src 'self'`（已随导航页加入，仅限本版本页面） | 极低（self 限定） | ✅ 已随导航页纳入 |
+| frame-src 缺失 | RC3 前未显式声明 frame-src；实测同源 iframe 在 default-src 回退下仍可加载；播放器空白与 frame-src 无关 | 导航页显式 `frame-src 'self'`。注意：`'self'` 指预览服务同源（协议/主机/端口），**不按项目 UUID 限定**；项目边界由代码保证——导航页 iframe 的 src 仅取自本项目的页面清单，且沙箱下 JS 无法读取跨项目响应 | 极低（同源静态资源；无跨项目读能力） | ✅ 已随导航页纳入 |
 | XHR/CORS 报错 | 同 connect-src 结论；核心页面渲染与交互（表单/弹窗/下拉）不依赖 XHR，不受影响 | — | — | 无需处理 |
 | Google Fonts / bootcss 外链被阻 | CSP `default-src 'none'` 阻止全部外链（预期行为） | 自托管字体/样式 | 引入第三方源扩大攻击面（被禁止） | ❌ 不纳入 |
 

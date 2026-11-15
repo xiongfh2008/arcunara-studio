@@ -124,7 +124,7 @@
 
 - **特征检测**（lib/axure.mjs）：`data/document.js` + `resources/scripts/axure/*.js` 双标记同时存在才判定 Axure 导出；纯 index.html 项目不误判；请求时从当前版本目录计算页面清单（更新/回滚自动一致，不执行上传脚本，不修改文件）
 - **业务页面提取**：顶层 .html 排除播放器壳（index/start 变体）与点文件；resources/chrome/plugins 下辅助页因嵌套自动排除；zh collation 确定性排序
-- **安全预览导航页**：`/p/{id}/` 对 Axure 项目渲染平台导航页（目录侧栏 + iframe 预览区 + 独立页面 + 原始入口 index.html 调试链接 + hash 深链）；页面名经 JSON `<` 转义 + textContent 渲染（XSS 安全）；URL 逐段 encodeURIComponent；导航页自身 sandbox allow-scripts（opaque origin、无 secrets、frame-ancestors 'none'、frame-src 'self' 仅限本版本页面）
+- **安全预览导航页**：`/p/{id}/` 对 Axure 项目渲染平台导航页（目录侧栏 + iframe 预览区 + 独立页面 + 原始入口 index.html 调试链接 + hash 深链）；页面名经 JSON `<` 转义 + textContent 渲染（XSS 安全）；URL 逐段 encodeURIComponent；导航页自身 sandbox allow-scripts（opaque origin、无 secrets、frame-ancestors 'none'、frame-src 'self' —— 'self' 即预览服务同源，不按项目 UUID 限定，项目边界由 iframe src 仅取自本项目页面清单的代码保证）
 - **detail.isAxure** 字段（additive）→ 工作台链接显示"安全预览（页面目录）"
 - **测试**：新增 `tests/axure.test.mjs` 12 项（双标记检测/误分类回归/导航页内容与排除/转义与 textContent 渲染/逐段编码回程（%41 不解码）/原始入口保留/非 Axure 不受影响/版本回滚清单一致/meta 隐藏）；全量 **115/115 通过**
 - **P1 播放器研究**（本地最小实验 + 静态扫描，详见 KNOWN_LIMITATIONS）：mainFrame 停留 about:blank 因 sandbox opaque origin 无法被父页驱动写入；本地 allow-same-origin 实验使 sitemap 面板部分恢复（证实根因），mainFrame 仍空白 → 完整兼容需多项被禁止的放宽，RC3 以安全预览导航替代；实验已完整还原
