@@ -71,3 +71,13 @@ test("project creation accepts established manual or localhost cookie session", 
   assert.doesNotMatch(html, /if \(!token\) \{ feedback\("请先连接 Token"/);
   assert.match(html, /window\.__ARCU_LOCAL_AUTO_LOGIN__/);
 });
+
+test("upload dialogs use server-advertised ZIP quotas instead of stale hardcoded limits", () => {
+  assert.match(html, /id="archiveQuotaHint"/);
+  assert.match(html, /id="newUploadLimitLabel"/);
+  assert.match(html, /id="versionUploadQuotaHint"/);
+  assert.match(html, /function renderUploadQuotas\(\)/);
+  assert.match(html, /q\.maxFiles/);
+  assert.match(html, /q\.maxExtractBytes/);
+  assert.match(html, /renderUploadQuotas\(\);/);
+});
