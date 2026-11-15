@@ -135,6 +135,92 @@ table.versions td:nth-child(7){text-align:right}
 @media(max-width:1280px){.app-layout{grid-template-columns:210px minmax(0,1fr)}.workspace{padding:22px}.content-grid{grid-template-columns:minmax(0,1.3fr) minmax(330px,1fr);gap:14px}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(140px,1fr) 43px 105px 65px 32px;gap:7px;padding-left:14px;padding-right:14px}.detail-header{padding:20px}}
 @media(max-width:1050px){.content-grid{grid-template-columns:minmax(0,1fr)}.detail-card{max-width:none}.detail-tabs button{font-size:13px;padding:13px 18px}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(180px,1fr) 62px 150px 85px 38px}}
 @media(max-width:680px){.shell-header{height:66px;padding:0 16px}.brand{font-size:17px}.app-layout{display:block}.app-sidebar{padding:9px;flex-direction:row;gap:4px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}.side-nav{flex:0 0 auto;margin:0;padding:9px 12px;font-size:12px;gap:7px}.side-nav .ui-icon{width:16px;height:16px}.sidebar-bottom{display:none}.workspace{padding:16px}.workspace-header{flex-wrap:wrap;gap:10px;margin-bottom:15px}.workspace-header h1{font-size:22px}.workspace-actions{width:100%}.workspace-actions button{flex:1}.list-toolbar{padding:14px;flex-wrap:wrap}.list-tools{width:100%}.list-tools input{flex:1}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(130px,1fr) 42px 74px 30px;gap:6px;padding:10px}.project-table-head span:nth-child(3),ul.projects li.project-row .project-date{display:none}.project-table-head span:nth-child(4){display:block}.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.detail-header{padding:18px}.detail-panel{padding:16px}.tokenbar{padding:12px;flex-wrap:wrap}.detail-actions{gap:6px}}
+
+/* Focused project workspace: one navigation destination; contextual tools
+   live with the selected project. All figures are read from actual APIs. */
+.app-layout{grid-template-columns:214px minmax(0,1fr)}
+.app-sidebar{background:#fff;padding:24px 12px 18px}
+.side-nav{font-size:14px;padding:13px 16px}
+.side-nav-current{background:#e7efff;color:#185de6;cursor:default}
+.workspace{max-width:1900px;padding:29px 26px 48px}
+.content-grid{grid-template-columns:minmax(520px,1.48fr) minmax(350px,1fr);gap:18px;align-items:start}
+.project-main-col{min-width:0}
+.workspace-header{margin-bottom:16px}
+.workspace-header h1{font-size:26px}
+.project-top-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.project-top-actions .search{flex:0 1 275px;width:100%;background:#fff}
+.project-top-actions .workspace-actions button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.list-toolbar{padding:17px 20px}
+.list-toolbar h2{font-size:16px}
+.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(160px,1fr) 82px 62px 135px 75px;gap:9px;padding-left:18px;padding-right:18px}
+.project-table-head{font-size:11px}
+ul.projects li.project-row{min-height:60px}
+.project-type{font-size:11px;color:#536baf;background:#eef3ff;border-radius:7px;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.project-inspector{display:grid;gap:12px;min-width:0}
+.project-inspector.hidden{display:none}
+.project-inspector .card{box-shadow:0 5px 20px #26396b08;border-color:#e7edf7}
+.project-title-line{display:flex;gap:10px;align-items:flex-start}
+.project-title-line>.ui-icon{color:#2563eb;margin-top:4px;flex-shrink:0}
+.project-title-line h2{font-size:17px;line-height:1.5;margin:0}
+.project-metadata{display:grid;grid-template-columns:100px minmax(0,1fr);gap:8px 12px;font-size:12px;margin:15px 0 0}
+.project-metadata dt{color:#7f8da4}
+.project-metadata dd{margin:0;color:#33435d;min-width:0;overflow-wrap:anywhere}
+.project-metadata .preview-url{display:flex;align-items:center;gap:5px;min-width:0;justify-content:space-between;border:1px solid #e1e9f5;border-radius:7px;background:#f7faff;padding:2px 4px 2px 8px}
+.project-metadata .preview-url>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-metadata .preview-url button{font-size:11px;padding:5px 4px}
+.detail-header{padding:20px}
+.detail-actions{margin:15px 0 9px;gap:8px}
+.detail-actions a,.detail-actions button{font-size:12px;padding:8px 10px}
+.detail-caption{display:flex;align-items:center;gap:5px;color:#8793a7;font-size:11px}
+.inspector-section{padding:16px 18px}
+.inspector-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.inspector-heading h3{margin:0;font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.inspector-heading h3 .ui-icon{color:#3768c8;width:17px;height:17px}
+button.small-link{background:transparent;color:#2563eb;border:0;padding:4px 0;font-size:12px;white-space:nowrap}
+button.small-link:hover{background:transparent;color:#153fa9;text-decoration:underline}
+.inspector-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.inspector-stats>div{background:#f6f8ff;border-radius:9px;padding:11px 14px}
+.inspector-stats span{display:block;font-size:11px;color:#78859c}
+.inspector-stats strong{font-size:23px;font-weight:750}
+.inspector-note{font-size:11px;color:var(--muted);margin:9px 0 0}
+.inspector-keyline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0;font-size:12px}
+.inspector-keyline>span{flex-shrink:0;color:#7b8aa0}
+.inspector-keyline>strong{font-weight:600;min-width:0;max-width:70%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.inspector-command{display:flex;align-items:center;justify-content:space-between;gap:5px;border:1px solid #e4eaf4;border-radius:8px;background:#f7faff;padding:5px 9px;font-size:12px;font-family:ui-monospace,Consolas,monospace}
+.inspector-command button{font-size:11px;font-family:inherit}
+.inspector-bottom{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.inspector-bottom .inspector-section{padding:14px 13px;min-width:0}
+.inspector-bottom .inspector-heading h3{font-size:13px}
+.recent-versions{display:flex;flex-direction:column;gap:0}
+.version-mini-row{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eff2f8;padding:9px 0;font-size:12px}
+.version-mini-row:first-child{border-top:0}
+.version-mini-row .tag{font-size:10px}
+.version-mini-row button{font-size:11px;padding:2px 4px}
+.inspector-bottom .inspector-keyline{font-size:11px}
+.inspector-bottom .small-toggle{padding:2px 7px;font-size:11px}
+.manage-dialog{width:min(900px,calc(100vw - 28px));max-height:calc(100dvh - 32px)}
+.manage-dialog-content{padding:0 12px 14px}
+.manage-dialog .detail-tabs{padding:0 8px}
+.manage-dialog .detail-tabs button{font-size:13px;padding:14px 12px}
+.manage-dialog .detail-panel{padding:19px 12px}
+.manage-dialog table.versions td,.manage-dialog table.versions th{padding:10px 7px}
+.version-modal .create-dialog-content{padding:22px 24px 25px}
+.upload-mode-tabs{display:flex;gap:6px;margin-bottom:15px;border-bottom:1px solid #e9edf7}
+.upload-mode-tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;color:#66748b;padding:9px 16px}
+.upload-mode-tabs button[aria-selected="true"]{border-bottom-color:#2563eb;color:#2563eb}
+.upload-mode-tabs button:hover{color:#2563eb;background:#f8faff}
+.upload-dropzone{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1.5px dashed #a9bff1;border-radius:12px;padding:24px 15px;background:#f7faff;cursor:pointer;text-align:center}
+.upload-dropzone:hover,.upload-dropzone.dragover{background:#edf3ff;border-color:#2563eb}
+.upload-dropzone .ui-icon{width:34px;height:34px;color:#2563eb}
+.upload-dropzone strong{font-size:13px}
+.upload-dropzone input{width:100%;max-width:300px;font-size:12px}
+.upload-help{margin:10px 0 13px;color:#76849c;font-size:11px}
+.upload-footer{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
+.version-html-area{width:100%;min-height:170px;border:1px solid #dbe3f1;border-radius:9px;padding:10px;font-family:ui-monospace,Consolas,monospace}
+.version-modal #versionUploadQuotaHint{margin:8px 0 16px}
+@media (max-width:1250px){.app-layout{grid-template-columns:190px minmax(0,1fr)}.workspace{padding:24px 18px}.content-grid{grid-template-columns:minmax(0,1fr)}.project-inspector{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.project-inspector>.detail-card{grid-row:span 2}.inspector-bottom{grid-column:1/-1}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(180px,1fr) 85px 75px 138px 80px}}
+@media (max-width:700px){.app-layout{display:block}.app-sidebar{border-right:0;border-bottom:1px solid var(--border);padding:8px 12px}.app-sidebar nav{display:flex}.app-sidebar .sidebar-bottom{display:none}.workspace{padding:16px}.project-top-actions{flex-wrap:wrap}.project-top-actions .search{flex:1 0 100%}.project-inspector{grid-template-columns:1fr}.project-inspector>.detail-card{grid-row:auto}.inspector-bottom{grid-column:auto;grid-template-columns:1fr}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(120px,1fr) 55px 70px;gap:6px;padding:10px}.project-table-head span:nth-child(2),.project-table-head span:nth-child(4),ul.projects li.project-row .project-type,ul.projects li.project-row .project-date{display:none}.project-table-head span:nth-child(5){display:none}.project-top-actions .workspace-actions{width:100%;display:flex}.project-top-actions .workspace-actions button{flex:1}.manage-dialog .detail-panel{padding:12px}}
+
 </style>
 </head>
 <body>
@@ -177,61 +263,91 @@ table.versions td:nth-child(7){text-align:right}
 <div id="feedback" class="hidden" role="status" aria-live="polite"></div>
 
 <div class="app-layout">
-  <aside class="app-sidebar" aria-label="功能管理">
-    <nav aria-label="主要功能">
-      <button class="side-nav" type="button" data-module="projects" aria-current="page"><svg class="ui-icon"><use href="#ui-folder"/></svg>项目管理</button>
-      <button class="side-nav" type="button" data-module="shares"><svg class="ui-icon"><use href="#ui-share"/></svg>分享管理</button>
-      <button class="side-nav" type="button" data-module="deploy"><svg class="ui-icon"><use href="#ui-rocket"/></svg>自动部署</button>
-      <button class="side-nav" type="button" data-module="stats"><svg class="ui-icon"><use href="#ui-chart"/></svg>访问统计</button>
-      <button class="side-nav" type="button" data-module="settings"><svg class="ui-icon"><use href="#ui-settings"/></svg>设置</button>
+  <aside class="app-sidebar" aria-label="主要导航">
+    <nav aria-label="工作台导航">
+      <span class="side-nav side-nav-current" aria-current="page"><svg class="ui-icon"><use href="#ui-folder"/></svg>项目管理</span>
     </nav>
-    <div class="sidebar-bottom">原型托管 · 版本管理 · 安全分享</div>
+    <div class="sidebar-bottom">Arcunara Studio<br>原型项目工作台</div>
   </aside>
   <main class="workspace">
-    <div class="workspace-header">
-      <div><h1 id="viewTitle">项目管理</h1><p id="viewSubtitle">上传、管理和分享你的原型项目</p></div>
-      <div class="workspace-actions">
-        <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
-        <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
-      </div>
-    </div>
     <div class="content-grid">
-      <section class="card project-list-card" aria-label="项目列表">
-        <div class="list-toolbar">
-          <h2>我的项目 <span class="count" id="projectCount">0 个项目</span></h2>
-          <div class="list-tools">
-            <input type="search" id="projectSearch" class="search" placeholder="搜索项目名称 / ID" aria-label="搜索项目名称或 ID" autocomplete="off">
-            <button id="refreshBtn" class="icon-action" title="刷新项目列表" aria-label="刷新项目列表">↻</button>
+      <div class="project-main-col">
+        <header class="workspace-header">
+          <div><h1 id="viewTitle">项目管理</h1><p id="viewSubtitle">上传、管理和分享你的原型项目</p></div>
+        </header>
+        <div class="project-top-actions">
+          <div class="workspace-actions">
+            <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
+            <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
           </div>
+          <input type="search" id="projectSearch" class="search" placeholder="搜索项目名称 / ID" aria-label="搜索项目名称或 ID" autocomplete="off">
         </div>
-        <div class="project-table-head"><span>项目名称</span><span>版本</span><span>更新时间</span><span>状态</span><span>操作</span></div>
-        <ul class="projects" id="projectList"></ul>
-        <div class="project-list-foot">选择项目可查看版本、分享及自动部署设置。</div>
-      </section>
-      <section id="detailCard" class="card detail-card hidden" aria-label="当前项目详情">
-        <div class="detail-header">
-          <h2 id="projectHeading">选择项目</h2>
-          <div class="detail-status">
-            <span class="status-chip" id="summaryState">—</span>
-            <span id="projectIdentifier"></span>
+        <section class="card project-list-card" aria-label="我的项目">
+          <div class="list-toolbar">
+            <h2>我的项目 <span class="count" id="projectCount">0 个项目</span></h2>
+            <button id="refreshBtn" class="icon-action" title="刷新项目列表" aria-label="刷新项目列表"><svg class="ui-icon"><use href="#ui-clock"/></svg></button>
           </div>
-          <div class="detail-actions">
-            <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
-            <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 更新版本</button>
-            <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
-            <button type="button" id="copyLink" class="ghost" title="复制原型预览链接">复制链接</button>
+          <div class="project-table-head"><span>项目名称</span><span>类型</span><span>当前版本</span><span>更新时间</span><span>预览状态</span></div>
+          <ul class="projects" id="projectList"></ul>
+          <div class="project-list-foot">选择项目后，可在右侧管理预览、分享、版本与自动部署。</div>
+        </section>
+      </div>
+      <aside id="detailCard" class="project-inspector hidden" aria-label="选中项目的功能管理">
+        <section class="card detail-card">
+          <div class="detail-header">
+            <div class="project-title-line"><svg class="ui-icon"><use href="#ui-folder"/></svg><h2 id="projectHeading">选择项目</h2></div>
+            <dl class="project-metadata">
+              <dt>项目 ID</dt><dd id="projectIdentifier">—</dd>
+              <dt>当前版本</dt><dd id="summaryVersion">—</dd>
+              <dt>入口文件</dt><dd id="summaryEntry">—</dd>
+              <dt>最近更新</dt><dd id="summaryUpdated">—</dd>
+              <dt>预览链接</dt><dd class="preview-url"><span id="summaryPreviewUrl">—</span><button type="button" id="copyLink" class="icon-action" aria-label="复制原型预览链接" title="复制预览链接">复制</button></dd>
+            </dl>
+            <div class="detail-actions">
+              <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
+              <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
+              <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
+            </div>
+            <div class="detail-caption"><span id="summaryState" class="status-chip">—</span><span id="summaryFiles">—</span> 个文件 · <span id="summarySize">—</span></div>
           </div>
-          <div class="summary-grid">
-            <div class="metric"><span>当前版本</span><strong id="summaryVersion">—</strong></div>
-            <div class="metric"><span>文件数量</span><strong id="summaryFiles">—</strong></div>
-            <div class="metric"><span>项目大小</span><strong id="summarySize">—</strong></div>
+        </section>
+        <section class="card inspector-section">
+          <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-share"/></svg> 分享概况</h3><button type="button" id="openSharesPanel" class="small-link">管理分享 ›</button></div>
+          <div class="inspector-stats">
+            <div><span>有效分享链接</span><strong id="activeShareCount">0</strong></div>
+            <div><span>分享访问次数</span><strong id="shareVisitCount">0</strong></div>
           </div>
+          <p class="inspector-note" id="shareOverviewNote">尚未创建分享链接</p>
+        </section>
+        <section class="card inspector-section">
+          <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 自动部署</h3><button type="button" id="openDeployPanel" class="small-link">配置部署 ›</button></div>
+          <div class="inspector-keyline"><span>有效部署密钥</span><span id="deployStatus" class="status-chip off">未配置</span></div>
+          <div class="inspector-keyline"><span>最近 CLI 发布</span><strong id="latestDeployTime">暂无</strong></div>
+          <div class="inspector-command">arcunara deploy ./dist <button type="button" class="icon-action" id="copyCliCommand" title="复制 CLI 命令">复制</button></div>
+        </section>
+        <div class="inspector-bottom">
+          <section class="card inspector-section">
+            <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-clock"/></svg> 版本记录</h3><button type="button" id="openVersionsPanel" class="small-link">全部版本 ›</button></div>
+            <div id="recentVersionList" class="recent-versions"></div>
+          </section>
+          <section class="card inspector-section">
+            <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-settings"/></svg> 项目设置</h3><button type="button" id="openSettingsPanel" class="small-link">编辑 ›</button></div>
+            <div class="inspector-keyline"><span>预览状态</span><button type="button" id="previewQuickToggle" class="ghost small-toggle">—</button></div>
+            <div class="inspector-keyline"><span>名称</span><strong id="settingsName">—</strong></div>
+            <div class="inspector-keyline"><span>描述</span><strong id="settingsDesc">—</strong></div>
+          </section>
         </div>
-        <nav class="detail-tabs" role="tablist" aria-label="当前项目管理">
+      </aside>
+    </div>
+  </main>
+</div>
+<dialog class="create-dialog manage-dialog" id="manageDialog" aria-labelledby="manageDialogHeading">
+  <div class="create-dialog-header"><h2 id="manageDialogHeading">项目管理</h2><button id="closeManageDialog" class="ghost" type="button">关闭</button></div>
+  <div class="manage-dialog-content"><nav class="detail-tabs" role="tablist" aria-label="项目功能管理">
           <button type="button" role="tab" data-tab="versions" aria-selected="true">版本记录</button>
-          <button type="button" role="tab" data-tab="shares" aria-selected="false">分享链接</button>
+          <button type="button" role="tab" data-tab="shares" aria-selected="false">分享管理</button>
           <button type="button" role="tab" data-tab="deploy" aria-selected="false">自动部署</button>
-          <button type="button" role="tab" data-tab="overview" aria-selected="false">项目信息</button>
+          <button type="button" role="tab" data-tab="overview" aria-selected="false">项目设置</button>
         </nav>
         <div class="detail-panel" data-panel="versions" role="tabpanel">    <h3>历史版本</h3>
     <p class="hint">上传新的 HTML/ZIP 后，原有预览地址保持不变。</p>
@@ -325,10 +441,8 @@ table.versions td:nth-child(7){text-align:right}
         <dl class="kv" id="detailMeta"></dl>
       </details>
 </div>
-      </section>
-    </div>
-  </main>
 </div>
+</dialog>
 <dialog class="create-dialog" id="versionUploadDialog" aria-labelledby="versionUploadHeading">
   <div class="create-dialog-header">
     <h2 id="versionUploadHeading">上传新版本</h2>
