@@ -103,3 +103,10 @@
 - `feature/hosting-mvp` @ `9163de8`（7 个提交）已推送
 - Draft PR：https://github.com/xiongfh2008/arcunara-studio/pull/1（**未合并**，等待人工评审）
 - 最终验证：82/82 测试通过、lint 21 文件通过、本地 Docker 构建与容器验收、真实 Chromium 浏览器端到端验证
+
+## RC1：合并前修复与部署准备 — ✅ 已完成
+
+- **Compose 项目名冲突修复**：项目名改为 `arcunara-studio-v03-test`（与 v0.2.0 目录派生名 `arcunara-studio-dev` 隔离），容器名同步改为 `arcunara-studio-api-v03-test`；新增 `scripts/compose-preflight.mjs`（npm run preflight，已加入 CI）静态校验项目名/端口/卷隔离/host 网络禁用
+- **工作台预览 URL 修复**：新增 `ARCU_PREVIEW_PUBLIC_BASE_URL`（区分内部监听地址与浏览器访问地址）；未设置时保持本地体验（同主机 + 实际监听端口，支持 port 0）；compose 默认注入 `http://127.0.0.1:28089`（SSH 转发可用）；预览链接永不携带 Token；非法配置拒绝启动
+- **Axure 兼容性预检查**（真实 Chromium，Axure 风格 + 敏感 API 探测夹具）：多页跳转/相对路径/外部 JS+CSS/图片/同源字体/iframe 全部通过；eval、Web Storage、SW、fetch/XHR 被安全边界阻止（如实记录）；发现并修复**字体加载阻断**（opaque origin 需要 ACAO:* + font-src 放宽，已用真实 TTF 验证解析与渲染）；**真实 RP11 导出验收仍未完成**
+- **测试计数统一**：全量重跑 94/94 通过（修复此前文档 82/83 不一致）；新增部署配置回归测试 `deploy-config.test.mjs`（7 项）与预览链接生成测试（8 项）

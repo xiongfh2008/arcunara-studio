@@ -37,7 +37,8 @@ v0.2.0 旧项目（根目录 `index.html` + `meta.json`）按"隐式 v1（legacy
 | `ARCU_DATA_DIR` | `/app/data` | 数据目录，启动自动创建 |
 | `ARCU_TOKEN_FILE` | `/run/secrets/api_token` | Bearer Token 文件，为空则拒绝启动 |
 | `ARCU_API_PORT` / `ARCU_API_HOST` | `3000` / `0.0.0.0` | API 监听（`0` = 随机端口） |
-| `ARCU_PREVIEW_PORT` / `ARCU_PREVIEW_HOST` | `3001` / `0.0.0.0` | 预览监听 |
+| `ARCU_PREVIEW_PORT` / `ARCU_PREVIEW_HOST` | `3001` / `0.0.0.0` | 预览监听（内部地址，与浏览器访问地址解耦） |
+| `ARCU_PREVIEW_PUBLIC_BASE_URL` | 未设置 | 工作台预览链接的浏览器侧基址（如 Docker 宿主映射 `http://127.0.0.1:28089` 或未来独立预览域名 `https://preview.example.com`）；未设置时链接使用同主机 + 实际监听端口；非法值（非 http/https、含凭据/查询串）拒绝启动 |
 | `ARCU_MAX_ZIP_BYTES` | 20 MiB | ZIP 压缩大小上限 |
 | `ARCU_MAX_EXTRACT_BYTES` | 80 MiB | 解压总量上限 |
 | `ARCU_MAX_FILE_BYTES` | 20 MiB | 解压单文件上限 |
@@ -87,11 +88,12 @@ ZIP 安全错误码：`INVALID_ZIP`、`UNSAFE_ENTRY_PATH`、`SYMLINK_ENTRY`、`U
 ## 测试
 
 ```bash
-npm test        # 全部测试（83 个，约 30s）
+npm test        # 全部测试（94 个，约 40s）
 npm run lint    # node --check 全部项目 .mjs
+npm run preflight   # 部署配置预检（Compose 项目名/端口/卷隔离）
 ```
 
-测试文件：`api.test.mjs`（回归+详情）、`upload.test.mjs`（上传引擎）、`zipsecurity.test.mjs`（恶意 ZIP）、`preview.test.mjs`（预览与穿越）、`versions.test.mjs`（版本与 legacy）、`console.test.mjs`（工作台）。`tests/helpers/` 提供子进程启动 harness 与测试专用 ZIP 构造器。
+测试文件：`api.test.mjs`（回归+详情）、`upload.test.mjs`（上传引擎）、`zipsecurity.test.mjs`（恶意 ZIP）、`preview.test.mjs`（预览与穿越）、`versions.test.mjs`（版本与 legacy）、`console.test.mjs`（工作台与预览链接生成）、`deploy-config.test.mjs`（部署配置回归）。`tests/helpers/` 提供子进程启动 harness 与测试专用 ZIP 构造器。
 
 测试以子进程运行真实服务（临时目录 + 127.0.0.1 + 随机端口），不触碰 VPS 数据或生产端口。浏览器端到端验证以真实 Chromium 完成（记录于 `docs/DEVELOPMENT_PROGRESS.md`）；Playwright 自动化测试为后续待办。
 

@@ -59,13 +59,18 @@ const BASE_HEADERS = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
+  // Sandboxed preview documents have opaque origins: without a CORS header,
+  // CORS-mode subresources (web fonts) can never load, even from the same
+  // project. Static preview assets are public and GET-only, so ACAO:* is
+  // safe and keeps sandbox isolation intact.
+  "Access-Control-Allow-Origin": "*",
   "Content-Security-Policy":
     "sandbox allow-scripts allow-forms; " +
     "default-src 'none'; " +
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data:; " +
-    "font-src 'self' data:; " +
+    "font-src 'self' data: https: http:; " +
     "connect-src 'self'; " +
     "media-src 'self' data:; " +
     "object-src 'none'; " +

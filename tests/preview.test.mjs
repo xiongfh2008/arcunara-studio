@@ -106,9 +106,14 @@ test("serves the entry page with sandbox CSP and nosniff", async () => {
   assert.match(csp, /script-src 'self' 'unsafe-inline'/);
   assert.match(csp, /style-src 'self' 'unsafe-inline'/);
   assert.match(csp, /img-src 'self' data:/);
+  assert.match(csp, /font-src 'self' data: https: http:/);
   assert.match(csp, /object-src 'none'/);
   assert.match(csp, /base-uri 'none'/);
   assert.match(csp, /form-action 'self'/);
+
+  // Sandboxed (opaque-origin) documents can only load CORS-mode
+  // subresources such as web fonts when the server approves any origin.
+  assert.equal(res.headers.get("access-control-allow-origin"), "*");
 
   assert.equal(await res.text(), INDEX_HTML);
 });

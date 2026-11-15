@@ -20,7 +20,7 @@ const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 // The legacy JSON html cap — intentionally kept byte-identical with v0.2.0.
 const LEGACY_HTML_BYTES = 180000;
 
-export function createApiHandler({ config, store, auth, version }) {
+export function createApiHandler({ config, store, auth, version, getPreviewPort }) {
   // The internal workbench page: static, contains no secrets (the operator
   // pastes the API token in-page; it is kept in JS memory only). Served
   // before the /api/ auth gate.
@@ -40,10 +40,17 @@ export function createApiHandler({ config, store, auth, version }) {
       return sendJson(res, 404, { error: "Not Found" });
     }
 
-    const html = consoleHtml.replace(
-      "__ARCU_PREVIEW_PORT__",
-      String(config.previewPort)
-    );
+    // Inject the browser-facing preview wiring: an absolute public base URL
+    // when configured (Docker / dedicated preview origin), otherwise null —
+    // the workbench then falls back to same-host + the ACTUAL bound preview
+    // port (which may differ from the configured one under port 0 testing).
+    const previewPort = getPreviewPort
+      ? getPreviewPort()
+      : config.previewPort;
+
+    const html = consoleHtml
+      .replace("__ARCU_PREVIEW_PORT__", String(previewPort))
+      .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl));
 
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",

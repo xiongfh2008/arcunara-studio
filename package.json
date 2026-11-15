@@ -15,7 +15,8 @@
   "scripts": {
     "start": "node apps/api/server.mjs",
     "test": "node --test \"tests/**/*.test.mjs\"",
-    "lint": "node scripts/syntax-check.mjs"
+    "lint": "node scripts/syntax-check.mjs",
+    "preflight": "node scripts/compose-preflight.mjs"
   },
   "dependencies": {
     "busboy": "^1.6.0",

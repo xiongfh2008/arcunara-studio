@@ -90,8 +90,11 @@
 </head>
 <body>
 <script>
-  // Injected by the server at serve time (unique placeholder token).
+  // Injected by the server at serve time (unique placeholder tokens).
+  // __PREVIEW_BASE__ is an absolute browser-facing URL when configured
+  // (Docker host mapping / dedicated preview origin), else null.
   window.__PREVIEW_PORT__ = __ARCU_PREVIEW_PORT__;
+  window.__PREVIEW_BASE__ = __ARCU_PREVIEW_BASE__;
 </script>
 <header>
   <h1>Arcunara Studio</h1>
@@ -174,10 +177,18 @@ let selectedVersion = null;
 
 const $ = (id) => document.getElementById(id);
 
-// The preview service runs on its own port/origin (see server config).
+// Preview links are built from the server-injected browser-facing wiring:
+// an absolute public base URL when configured, otherwise same-host + the
+// actual bound preview port. No token is ever part of a preview URL.
 function previewUrlFor(id) {
+  const path = `/p/${id}/`;
+
+  if (window.__PREVIEW_BASE__) {
+    return `${window.__PREVIEW_BASE__}${path}`;
+  }
+
   const port = window.__PREVIEW_PORT__ || window.location.port;
-  return `${window.location.protocol}//${window.location.hostname}:${port}/p/${id}/`;
+  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
 }
 
 function feedback(message, ok) {

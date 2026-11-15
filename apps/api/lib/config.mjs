@@ -33,6 +33,44 @@ function portFromEnv(env, name, fallback) {
   return intFromEnv(env, name, fallback, { min: 0, max: 65535 });
 }
 
+// Browser-facing base URL for preview links built by the workbench.
+// The preview server's LISTEN address (port/host) is an internal concern —
+// under Docker the browser reaches previews via the host-mapped port or a
+// dedicated public origin, so the workbench must never construct links from
+// the internal port when an explicit base URL is configured.
+function previewPublicBaseUrlFromEnv(env) {
+  const raw = env.ARCU_PREVIEW_PUBLIC_BASE_URL;
+
+  if (raw === undefined || raw.trim() === "") {
+    return null;
+  }
+
+  let url;
+
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error(`Invalid ARCU_PREVIEW_PUBLIC_BASE_URL: "${raw}"`);
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(
+      `Invalid ARCU_PREVIEW_PUBLIC_BASE_URL protocol: "${url.protocol}" (use http/https)`
+    );
+  }
+
+  if (url.username || url.password) {
+    throw new Error("ARCU_PREVIEW_PUBLIC_BASE_URL must not contain credentials");
+  }
+
+  if (url.search || url.hash) {
+    throw new Error("ARCU_PREVIEW_PUBLIC_BASE_URL must not contain a query or fragment");
+  }
+
+  const path = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
+  return `${url.origin}${path}`;
+}
+
 export function loadConfig(env = process.env) {
   const tokenFile = env.ARCU_TOKEN_FILE || "/run/secrets/api_token";
   const token = readFileSync(tokenFile, "utf8").trim();
@@ -65,6 +103,7 @@ export function loadConfig(env = process.env) {
     apiHost: env.ARCU_API_HOST || "0.0.0.0",
     previewPort: portFromEnv(env, "ARCU_PREVIEW_PORT", 3001),
     previewHost: env.ARCU_PREVIEW_HOST || "0.0.0.0",
+    previewPublicBaseUrl: previewPublicBaseUrlFromEnv(env),
     limits
   };
 }

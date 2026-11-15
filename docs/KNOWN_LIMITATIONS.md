@@ -52,8 +52,26 @@
 
 ## Axure 导出兼容性
 
-- Axure RP11 导出的静态站点（本地 HTML/CSS/JS/图片/字体引用）与本服务的 CSP/路径策略理论上兼容，**但尚未用真实 RP11 导出文件验证** —— 需在真实导出可用时补充浏览器验证后才能声明兼容。
-- 引用外部 CDN 的导出会被 CSP 阻止（见上文）。
+**v0.3.0 RC1 预检查结果**（Axure 风格夹具 + 敏感 API 探测夹具，真实 Chromium 执行；**尚未用真实 RP11 导出文件验收**）：
+
+| 检查项 | 结果 |
+| --- | --- |
+| 多页面 HTML 跳转（真实点击） | ✅ 正常 |
+| 相对路径资源（含 `../` 跨子目录引用） | ✅ 正常 |
+| 外部 JavaScript / CSS 加载与生效 | ✅ 正常 |
+| 图片 | ✅ 正常 |
+| 同源自定义字体（@font-face TTF，真实字体解析） | ✅ 正常（需要 `Access-Control-Allow-Origin: *` + `font-src` 放宽 —— RC1 已修复） |
+| 同项目 iframe 嵌套页面 | ✅ 加载；框架内文档同样受完整 sandbox CSP 约束 |
+| `eval` / `new Function` | ❌ 被阻止（CSP EvalError）—— 依赖 eval 的 Axure 插件会失效 |
+| `localStorage` / `sessionStorage` / `document.cookie` | ❌ SecurityError（opaque origin）—— Axure JS 若无保护直接访问会抛异常 |
+| `fetch` / XHR（含同源） | ❌ 全部拒绝（opaque origin 下 CSP `'self'` 不匹配任何目标）—— 依赖 AJAX 的交互原型会失效；核心渲染不依赖 |
+| Service Worker / Web Worker | ❌ 阻止 |
+| WebSocket | 构造可用，连接受 CSP 约束 |
+| `window.top` 读取 | 允许；写入导航被 sandbox 阻止 |
+
+**结论**：以静态标记资源 + 内联/外部脚本为主体的 Axure 导出（RP11 常见形态）核心渲染兼容；依赖 AJAX、Web Storage、eval 或 CDN 资源的功能会降级或失效 —— 均为有意保留的安全边界，不为兼容性关闭 sandbox。
+
+**真实导出验收仍未完成**：需要拿到真实 Axure RP11 导出文件后补充浏览器验收，在此之前不声明完全兼容。
 
 ## 浏览器测试
 

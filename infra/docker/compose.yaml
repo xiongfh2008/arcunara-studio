@@ -1,11 +1,11 @@
-# Arcunara Studio — isolated development environment (v0.3.0).
+# Arcunara Studio — isolated v0.3.0 test environment.
 #
-# This stack is intentionally separated from the existing VPS v0.2.0 dev
-# deployment (which uses host ports 18088/18089 and its own data/secrets):
-#   - dedicated compose project name and container name
-#   - host ports 28088/28089 (also bound to 127.0.0.1 only)
-#   - its own data/ and secrets/ directories next to this file
-# It never touches /opt/arcunara-studio-dev. See docs/deployment.md.
+# Project/container names are deliberately distinct from ANY existing
+# deployment (in particular from the v0.2.0 compose project derived from
+# /opt/arcunara-studio-dev): never reuse the v0.2.0 project name — see
+# docs/deployment.md and scripts/compose-preflight.mjs.
+#
+# This stack never touches /opt/arcunara-studio-dev or ports 18088/18089.
 #
 # Security posture (same as the validated v0.2.0 baseline):
 # non-root user, read-only rootfs, dropped capabilities, no-new-privileges,
@@ -13,7 +13,7 @@
 # healthcheck. Application code and dependencies are baked into the image
 # (infra/docker/Dockerfile); data and tokens are injected at runtime.
 
-name: arcunara-studio-dev
+name: arcunara-studio-v03-test
 
 services:
   api:
@@ -21,7 +21,7 @@ services:
       context: ../..
       dockerfile: infra/docker/Dockerfile
     image: arcunara-studio:0.3.0
-    container_name: arcunara-studio-api-dev
+    container_name: arcunara-studio-api-v03-test
     working_dir: /app
     command: ["node", "apps/api/server.mjs"]
 
@@ -30,8 +30,18 @@ services:
 
     ports:
       # Deliberately different from the existing deployment (18088/18089).
+      # Bound to loopback only — access from a laptop via SSH port forwarding.
       - "127.0.0.1:28088:3000"
       - "127.0.0.1:28089:3001"
+
+    environment:
+      # Browser-facing base URL for preview links built by the workbench
+      # (/console). Default matches the host port mapping above so SSH
+      # local port forwarding works out of the box. Override with the
+      # ARCU_PREVIEW_PUBLIC_BASE_URL environment variable (e.g. a future
+      # dedicated preview origin like https://preview.example.com) without
+      # any workbench code changes. Never includes tokens.
+      - "ARCU_PREVIEW_PUBLIC_BASE_URL=${ARCU_PREVIEW_PUBLIC_BASE_URL:-http://127.0.0.1:28089}"
 
     volumes:
       - ./data:/app/data

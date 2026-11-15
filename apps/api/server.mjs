@@ -30,7 +30,7 @@ const store = createStore(config);
 await store.init();
 
 const api = http.createServer(
-  createApiHandler({ config, store, auth, version: VERSION })
+  createApiHandler({ config, store, auth, version: VERSION, getPreviewPort: () => getPreviewPort() })
 );
 
 const preview = http.createServer(createPreviewHandler({ store }));
@@ -44,3 +44,8 @@ preview.listen(config.previewPort, config.previewHost, () => {
     `Arcunara Preview v0.3 started on port ${preview.address().port}`
   );
 });
+
+// The workbench builds preview links from the ACTUAL bound preview port
+// (config may say 0 = ephemeral) unless a public base URL is configured.
+const getPreviewPort = () =>
+  preview.listening ? preview.address().port : config.previewPort;
