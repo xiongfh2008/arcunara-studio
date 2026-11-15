@@ -174,6 +174,22 @@ let projects = [];
 let selected = null;
 let versions = [];
 let selectedVersion = null;
+let limits = null; // fetched from /api/limits after connect (null until then)
+let creating = false; // double-submit guards
+let uploadingVersion = false;
+
+const FALLBACK_LIMITS = {
+  maxZipBytes: 20 * 1024 * 1024,
+  maxExtractBytes: 80 * 1024 * 1024,
+  maxFileBytes: 20 * 1024 * 1024,
+  maxHtmlBytes: 2 * 1024 * 1024,
+  maxFiles: 2000,
+  maxDepth: 20,
+  maxPathLength: 256,
+  maxDescriptionChars: 1000,
+  maxUploadBodyBytes: 24 * 1024 * 1024,
+  maxJsonBodyBytes: 256 * 1024
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -212,10 +228,67 @@ function api(path, options = {}) {
     try { json = await res.json(); } catch { /* non-JSON */ }
     if (!res.ok) {
       const detail = json ? `${json.error}${json.code ? ` [${json.code}]` : ""}` : `HTTP ${res.status}`;
-      throw new Error(detail);
+      const err = new Error(detail);
+      err.json = json; // machine-readable {error, code} for friendly hints
+      throw err;
     }
     return json;
   });
+}
+
+// Quota-aware, human-readable reasons for upload failures. The raw server
+// `code` stays visible in the message so logs stay greppable.
+const ERROR_HINTS = {
+  TOO_MANY_FILES: (q) => `ZIP 内文件（含目录）数量超过当前配额（当前上限 ${q.maxFiles} 个）。`,
+  HTML_TOO_LARGE: (q) => `单个 HTML 文件超过当前配额（当前上限 ${fmtBytes(q.maxHtmlBytes)}）。`,
+  EXTRACT_LIMIT_EXCEEDED: (q) => `ZIP 解压后总大小超过当前配额（当前上限 ${fmtBytes(q.maxExtractBytes)}）。`,
+  ZIP_TOO_LARGE: (q) => `ZIP 压缩包超过当前配额（当前上限 ${fmtBytes(q.maxZipBytes)}）。`,
+  UPLOAD_TOO_LARGE: (q) => `请求体超过总量上限（当前上限 ${fmtBytes(q.maxUploadBodyBytes)}）。`,
+  UNSAFE_ENTRY_PATH: () => "ZIP 内包含不安全的文件路径（疑似路径穿越/绝对路径），已拒绝。",
+  ENTRY_COLLISION: () => "ZIP 内存在重复或大小写/Unicode 规范化冲突的文件名，已拒绝。",
+  SYMLINK_ENTRY: () => "ZIP 内包含符号链接，已拒绝。",
+  UNSUPPORTED_ENTRY_TYPE: () => "ZIP 内包含非常规文件类型，已拒绝。",
+  ENCRYPTED_ENTRY: () => "ZIP 已加密，暂不支持。",
+  DEPTH_LIMIT_EXCEEDED: (q) => `ZIP 内目录层级超过当前配额（当前上限 ${q.maxDepth} 层）。`,
+  PATH_LIMIT_EXCEEDED: (q) => `ZIP 内文件路径过长（当前上限 ${q.maxPathLength} 字符）。`,
+  INVALID_ZIP: () => "ZIP 文件损坏或不是有效的 ZIP 压缩包。",
+  EMPTY_ARCHIVE: () => "ZIP 压缩包为空。",
+  NO_HTML_ENTRY: () => "ZIP 内没有 HTML 页面。",
+  ENTRY_NOT_DETERMINED: () => "无法确定唯一入口 HTML（存在多个候选页面且无 index.html）。",
+  INVALID_HTML_FILE: () => "HTML 文件内容无效（缺少 <html> 标签）。",
+  EMPTY_FILE: () => "上传的文件为空。",
+  FILE_REQUIRED: () => "请选择要上传的文件。",
+  MULTIPLE_FILES: () => "一次只能上传一个文件。",
+  NAME_REQUIRED: () => "请输入项目名称。",
+  NAME_TOO_LONG: () => "项目名称超过 100 个字符。",
+  UNSUPPORTED_FILE_TYPE: () => "仅支持 .html / .htm / .zip 文件。"
+};
+
+function friendlyError(err) {
+  const json = err && err.json;
+  const q = limits ?? FALLBACK_LIMITS;
+  const hint = json && json.code && ERROR_HINTS[json.code];
+
+  if (hint) {
+    return `${hint(q)} [${json.code}]`;
+  }
+
+  return err?.message ?? "未知错误";
+}
+
+// Busy-state helper: disables the button so the request cannot be
+// double-submitted, shows a stage hint instead of a fake progress bar.
+function setBusy(btn, busy, busyLabel) {
+  if (busy) {
+    btn.dataset.label = btn.textContent;
+    btn.textContent = busyLabel;
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+  } else {
+    btn.textContent = btn.dataset.label ?? btn.textContent;
+    btn.disabled = false;
+    btn.removeAttribute("aria-busy");
+  }
 }
 
 function setAuthorized(ok) {
@@ -336,11 +409,14 @@ $("saveToken").addEventListener("click", async () => {
   token = $("tokenInput").value.trim();
   if (!token) { feedback("请输入 Token", false); return; }
   try {
+    const l = await api("/api/limits");
+    limits = l.limits ?? null;
     await loadProjects();
     setAuthorized(true);
     feedback(`已连接，共 ${projects.length} 个项目`, true);
   } catch (err) {
     token = null;
+    limits = null;
     setAuthorized(false);
     feedback(`连接失败：${err.message}`, false);
   }
@@ -356,6 +432,10 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 
 $("createBtn").addEventListener("click", async () => {
+  const btn = $("createBtn");
+
+  if (btn.disabled) return; // double-submit guard
+
   const name = $("newName").value.trim();
   const desc = $("newDesc").value.trim();
   const file = $("newFile").files[0];
@@ -363,6 +443,9 @@ $("createBtn").addEventListener("click", async () => {
 
   if (!token) { feedback("请先连接 Token", false); return; }
   if (!name) { feedback("请输入项目名称", false); return; }
+
+  creating = true;
+  setBusy(btn, true, file ? "上传中…" : "处理中…");
 
   try {
     let created;
@@ -388,14 +471,23 @@ $("createBtn").addEventListener("click", async () => {
     await loadProjects();
     await selectProject(created.id);
   } catch (err) {
-    feedback(`创建失败：${err.message}`, false);
+    feedback(`创建失败：${friendlyError(err)}`, false);
+  } finally {
+    creating = false;
+    setBusy(btn, false);
   }
 });
 
 $("uploadVersionBtn").addEventListener("click", async () => {
+  const btn = $("uploadVersionBtn");
+
+  if (btn.disabled) return; // double-submit guard
   if (!selected) { feedback("请先选择项目", false); return; }
   const file = $("versionFile").files[0];
   if (!file) { feedback("请选择要上传的文件", false); return; }
+
+  uploadingVersion = true;
+  setBusy(btn, true, "上传中…");
 
   try {
     const fd = new FormData();
@@ -406,7 +498,10 @@ $("uploadVersionBtn").addEventListener("click", async () => {
     await selectProject(selected.id);
     await loadProjects();
   } catch (err) {
-    feedback(`上传失败：${err.message}`, false);
+    feedback(`上传失败：${friendlyError(err)}`, false);
+  } finally {
+    uploadingVersion = false;
+    setBusy(btn, false);
   }
 });
 
