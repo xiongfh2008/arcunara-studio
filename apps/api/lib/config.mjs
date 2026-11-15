@@ -79,22 +79,6 @@ export function loadConfig(env = process.env) {
     throw new Error("API token file is empty");
   }
 
-  const limits = {
-    // Legacy JSON upload cap — kept byte-identical with v0.2.0 behavior.
-    maxJsonBodyBytes: intFromEnv(env, "ARCU_MAX_JSON_BODY_BYTES", 256 * 1024),
-
-    // Multipart/ZIP upload engine limits (see docs/development.md).
-    maxZipBytes: intFromEnv(env, "ARCU_MAX_ZIP_BYTES", 20 * MIB),
-    maxExtractBytes: intFromEnv(env, "ARCU_MAX_EXTRACT_BYTES", 80 * MIB),
-    maxFileBytes: intFromEnv(env, "ARCU_MAX_FILE_BYTES", 20 * MIB),
-    maxHtmlBytes: intFromEnv(env, "ARCU_MAX_HTML_BYTES", 2 * MIB),
-    maxFiles: intFromEnv(env, "ARCU_MAX_FILES", 2000),
-    maxDepth: intFromEnv(env, "ARCU_MAX_DEPTH", 20),
-    maxPathLength: intFromEnv(env, "ARCU_MAX_PATH_LENGTH", 256),
-    maxDescriptionChars: intFromEnv(env, "ARCU_MAX_DESCRIPTION_CHARS", 1000),
-    maxUploadBodyBytes: intFromEnv(env, "ARCU_MAX_UPLOAD_BODY_BYTES", 24 * MIB)
-  };
-
   // Local convenience is opt-in and must never silently turn on in Docker/VPS.
   // Both listeners must bind exactly to IPv4 loopback before issuing a local
   // browser session. The admin token is still required for CLI and remote use.
@@ -108,6 +92,27 @@ export function loadConfig(env = process.env) {
   if (localAutoLogin && (apiHost !== "127.0.0.1" || previewHost !== "127.0.0.1")) {
     throw new Error("ARCU_LOCAL_AUTO_LOGIN requires both API and preview to bind 127.0.0.1");
   }
+
+  // Larger, previously tested Axure-export profile for explicitly enabled
+  // loopback-only development. The normal production defaults stay strict.
+  // Explicit ARCU_MAX_* overrides always take precedence.
+  const localAxureLimits = localAutoLogin;
+  const limits = {
+    // Legacy JSON upload cap — kept byte-identical with v0.2.0 behavior.
+    maxJsonBodyBytes: intFromEnv(env, "ARCU_MAX_JSON_BODY_BYTES", 256 * 1024),
+
+    // Multipart/ZIP upload engine limits (see docs/development.md).
+    maxZipBytes: intFromEnv(env, "ARCU_MAX_ZIP_BYTES", 20 * MIB),
+    maxExtractBytes: intFromEnv(env, "ARCU_MAX_EXTRACT_BYTES", (localAxureLimits ? 128 : 80) * MIB),
+    maxFileBytes: intFromEnv(env, "ARCU_MAX_FILE_BYTES", 20 * MIB),
+    maxHtmlBytes: intFromEnv(env, "ARCU_MAX_HTML_BYTES", (localAxureLimits ? 8 : 2) * MIB),
+    maxFiles: intFromEnv(env, "ARCU_MAX_FILES", localAxureLimits ? 5000 : 2000),
+    maxDepth: intFromEnv(env, "ARCU_MAX_DEPTH", 20),
+    maxPathLength: intFromEnv(env, "ARCU_MAX_PATH_LENGTH", 256),
+    maxDescriptionChars: intFromEnv(env, "ARCU_MAX_DESCRIPTION_CHARS", 1000),
+    maxUploadBodyBytes: intFromEnv(env, "ARCU_MAX_UPLOAD_BODY_BYTES", 24 * MIB)
+  };
+
 
   return {
     localAutoLogin,
