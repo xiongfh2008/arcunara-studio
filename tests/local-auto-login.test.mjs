@@ -31,6 +31,32 @@ after(async () => {
   }
 });
 
+test("loopback dev auto login selects proven Axure ZIP quotas without widening production defaults", async () => {
+  const r = await server.api("/api/limits", { token: null, headers: { cookie } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.limits.maxFiles, 5000);
+  assert.equal(r.json.limits.maxHtmlBytes, 8 * 1024 * 1024);
+  assert.equal(r.json.limits.maxExtractBytes, 128 * 1024 * 1024);
+  assert.equal(r.json.limits.maxZipBytes, 20 * 1024 * 1024);
+
+  const custom = await startServer({
+    ARCU_LOCAL_AUTO_LOGIN: "1",
+    ARCU_MAX_FILES: "3500",
+    ARCU_MAX_HTML_BYTES: "6291456",
+    ARCU_MAX_EXTRACT_BYTES: "104857600"
+  });
+  try {
+    const overridden = await custom.api("/api/limits");
+    assert.equal(overridden.status, 200);
+    assert.equal(overridden.json.limits.maxFiles, 3500);
+    assert.equal(overridden.json.limits.maxHtmlBytes, 6 * 1024 * 1024);
+    assert.equal(overridden.json.limits.maxExtractBytes, 100 * 1024 * 1024);
+  } finally {
+    await custom.stop();
+    await custom.cleanup();
+  }
+});
+
 test("browser session reads APIs without manually pasting a token", async () => {
   const anonymous = await server.api("/api/projects", { token: null });
   assert.equal(anonymous.status, 401);
