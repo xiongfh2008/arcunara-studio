@@ -1,6 +1,7 @@
 // Local auto-login integration: opt-in, localhost-only, browser session
 // cookie (not the admin token), and Origin/header protection on writes.
 import assert from "node:assert/strict";
+import http from "node:http";
 import { before, after, test } from "node:test";
 import { startServer } from "./helpers/harness.mjs";
 import { loadConfig } from "../apps/api/lib/config.mjs";
@@ -52,10 +53,19 @@ test("forged cookie, invalid bearer token and wrong host remain unauthorized", a
   });
   assert.equal(explicitBadBearer.status, 401);
 
-  const wrongHost = await server.api("/api/projects", {
-    token: null, headers: { cookie, host: "evil.test:3100" }
+  // Node fetch may rewrite the Host header: use the native HTTP client so
+  // this test actually sends the untrusted Host value over the wire.
+  const wrongHostStatus = await new Promise((resolve, reject) => {
+    const req = http.request(server.apiBase + "/api/projects", {
+      headers: { Host: "evil.test:3100", Cookie: cookie }
+    }, (res) => {
+      res.resume();
+      res.on("end", () => resolve(res.statusCode));
+    });
+    req.on("error", reject);
+    req.end();
   });
-  assert.equal(wrongHost.status, 401);
+  assert.equal(wrongHostStatus, 401);
 });
 
 test("local writes require same-origin Origin and non-simple request header", async () => {
