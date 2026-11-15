@@ -13,6 +13,7 @@ import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
 import { parseDeployToken } from "./auth.mjs";
+import { createLocalSession } from "./local-session.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
@@ -49,9 +50,11 @@ function deployKeyAllowed(method, pathname, projectId) {
 }
 
 export function createApiHandler({ config, store, auth, version, getPreviewPort }) {
-  // The internal workbench page: static, contains no secrets (the operator
-  // pastes the API token in-page; it is kept in JS memory only). Served
-  // before the /api/ auth gate.
+  // Only an explicitly enabled loopback development instance may issue a
+  // short-lived browser cookie. The admin bearer token is never exposed.
+  const localSession = createLocalSession(config);
+  // The internal workbench is static, contains no credentials and remains
+  // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
 
   try {
@@ -78,9 +81,12 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
 
     const html = consoleHtml
       .replace("__ARCU_PREVIEW_PORT__", String(previewPort))
-      .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl));
+      .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl))
+      .replace("__ARCU_LOCAL_AUTO_LOGIN__", String(localSession.eligible(req)));
 
+    const localCookie = localSession.issueCookie(req);
     res.writeHead(200, {
+      ...(localCookie ? { "Set-Cookie": localCookie } : {}),
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
@@ -154,7 +160,10 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
         }
 
         req.deployKey = { projectId: verdict.projectId, keyId: verdict.key.id };
-      } else if (!pathname.startsWith("/api/") || !auth(req)) {
+      } else if (
+        !pathname.startsWith("/api/") ||
+        (!auth(req) && !localSession.authorized(req))
+      ) {
         return sendJson(res, 401, { error: "Unauthorized" });
       }
 
