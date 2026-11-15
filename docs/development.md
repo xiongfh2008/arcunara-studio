@@ -69,7 +69,7 @@ $env:ARCU_LOCAL_AUTO_LOGIN = "1"
 npm start
 ```
 
-浏览器访问 `http://127.0.0.1:3100/console` 即自动连接。本地开发模式要求已有的非空 Token 文件，但不将其返回到浏览器。服务器只在本机请求 `/console` 时签发独立的、仅 `/api` 使用的临时会话 Cookie（`HttpOnly; SameSite=Strict`），每次服务重启失效；修改数据的请求还需同源 `Origin` 和自定义请求头。默认关闭，非 loopback 监听时拒绝启动。**禁止在 VPS、共享主机或经 SSH 隧道对不受信任用户开放的实例上启用此选项。**
+浏览器访问 `http://127.0.0.1:3100/console` 即自动连接。在此**仅限本机**的自动登录模式下，上传配额还会采用已验证的大型 Axure ZIP 配置：**5,000 个文件/目录、单 HTML 8 MiB、解压总量 128 MiB**，但 ZIP 压缩包仍为 20 MiB；`ARCU_MAX_FILES`、`ARCU_MAX_HTML_BYTES`、`ARCU_MAX_EXTRACT_BYTES` 的显式设置始终优先。默认服务模式及 VPS 不受影响。工作台的上传弹窗以 `/api/limits` 返回的配额为准。本地开发模式要求已有的非空 Token 文件，但不将其返回到浏览器。服务器只在本机请求 `/console` 时签发独立的、仅 `/api` 使用的临时会话 Cookie（`HttpOnly; SameSite=Strict`），每次服务重启失效；修改数据的请求还需同源 `Origin` 和自定义请求头。默认关闭，非 loopback 监听时拒绝启动。**禁止在 VPS、共享主机或经 SSH 隧道对不受信任用户开放的实例上启用此选项。**
 
 `npm test` 的测试服务器会强制禁用继承的本地自动登录配置，仅明确测试该功能的用例会打开，防止影响原有 Bearer Token 鉴权回归测试。
 
