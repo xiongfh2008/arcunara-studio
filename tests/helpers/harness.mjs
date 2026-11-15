@@ -31,6 +31,8 @@ export async function startServer(envOverrides = {}) {
       ARCU_PREVIEW_HOST: "127.0.0.1",
       ARCU_API_PORT: "0",
       ARCU_PREVIEW_PORT: "0",
+      // Never inherit a developer's opt-in localhost browser session during tests.
+      ARCU_LOCAL_AUTO_LOGIN: "0",
       ...envOverrides
     },
     stdio: ["ignore", "pipe", "pipe"]
