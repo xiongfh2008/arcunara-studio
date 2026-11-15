@@ -38,6 +38,7 @@ v0.2.0 旧项目（根目录 `index.html` + `meta.json`）按"隐式 v1（legacy
 | `ARCU_TOKEN_FILE` | `/run/secrets/api_token` | Bearer Token 文件，为空则拒绝启动 |
 | `ARCU_API_PORT` / `ARCU_API_HOST` | `3000` / `0.0.0.0` | API 监听（`0` = 随机端口） |
 | `ARCU_PREVIEW_PORT` / `ARCU_PREVIEW_HOST` | `3001` / `0.0.0.0` | 预览监听（内部地址，与浏览器访问地址解耦） |
+| `ARCU_LOCAL_AUTO_LOGIN` | `0` | **仅本机开发**：设为 `1` 后，只允许 API 与预览都绑定 `127.0.0.1`，本机访问 `/console` 将自动建立 HttpOnly 临时会话，不再手动输入 Token。VPS/Docker 保持 `0`；即使启用，也仍需合法 `ARCU_TOKEN_FILE` 启动服务。 |
 | `ARCU_PREVIEW_PUBLIC_BASE_URL` | 未设置 | 工作台预览链接的浏览器侧基址（如 Docker 宿主映射 `http://127.0.0.1:28089` 或未来独立预览域名 `https://preview.example.com`）；未设置时链接使用同主机 + 实际监听端口；非法值（非 http/https、含凭据/查询串）拒绝启动 |
 | `ARCU_MAX_ZIP_BYTES` | 20 MiB | ZIP 压缩大小上限 |
 | `ARCU_MAX_EXTRACT_BYTES` | 80 MiB | 解压总量上限 |
@@ -51,6 +52,26 @@ v0.2.0 旧项目（根目录 `index.html` + `meta.json`）按"隐式 v1（legacy
 | `ARCU_MAX_JSON_BODY_BYTES` | 256 KiB | legacy JSON 请求体上限（与 v0.2.0 一致） |
 
 所有限额在**处理过程中**生效（流式/逐条目），不是事后检查。
+
+## Windows 本地免输入 Token（仅开发使用）
+
+当前工作台采用管理员 API Token，并非正式多用户登录。为避免每次刷新都手动粘贴 Token，本地可显式开启自动连接：
+
+```powershell
+cd D:\\Project\\arcunara-studio
+$env:ARCU_DATA_DIR = ".local/data"
+$env:ARCU_TOKEN_FILE = ".local/secrets/api_token"
+$env:ARCU_API_HOST = "127.0.0.1"
+$env:ARCU_PREVIEW_HOST = "127.0.0.1"
+$env:ARCU_API_PORT = "3100"
+$env:ARCU_PREVIEW_PORT = "3101"
+$env:ARCU_LOCAL_AUTO_LOGIN = "1"
+npm start
+```
+
+浏览器访问 `http://127.0.0.1:3100/console` 即自动连接。本地开发模式要求已有的非空 Token 文件，但不将其返回到浏览器。服务器只在本机请求 `/console` 时签发独立的、仅 `/api` 使用的临时会话 Cookie（`HttpOnly; SameSite=Strict`），每次服务重启失效；修改数据的请求还需同源 `Origin` 和自定义请求头。默认关闭，非 loopback 监听时拒绝启动。**禁止在 VPS、共享主机或经 SSH 隧道对不受信任用户开放的实例上启用此选项。**
+
+`npm test` 的测试服务器会强制禁用继承的本地自动登录配置，仅明确测试该功能的用例会打开，防止影响原有 Bearer Token 鉴权回归测试。
 
 ## API 规范
 
