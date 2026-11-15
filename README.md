@@ -2,7 +2,7 @@
 
 面向全球用户的 AI 原型转换与托管 SaaS：HTML/ZIP 原型一键托管、更新与分享；后续支持 HTML → Axure RP11 原生 `.rp` 转换、CLI 与各 AI 工具 Skill。
 
-- **v0.3.0（当前分支开发中）**：P0 HTML 托管 MVP —— 单 HTML / ZIP 多文件项目上传、完整静态预览、版本历史与回滚、内部工作台。
+- **v0.3.0（RC4 预览体验开发中）**：HTML/ZIP 托管、版本回滚、Axure 多页面安全导航、页面搜索与画布宽度切换（桌面/平板/手机）。
 - **v0.2.0**：已在 VPS Docker 环境完成真实 HTTP 验收的托管基线（`legacy-v02/` 冻结保存）。
 - **后续规划**：HTML → `.rp` 转换（`packages/rp-converter`）、用户系统与访问控制、CLI / Codex / Cursor / Trae Skill、浏览器插件。
 
@@ -28,7 +28,7 @@ arcunara-studio/
 │   └── rp-converter/      # HTML → .rp 转换器（未实现，占位）
 ├── infra/
 │   └── docker/            # Dockerfile + 独立开发环境 compose（28088/28089）
-├── tests/                 # 116 个零依赖集成测试（node:test）+ helpers
+├── tests/                 # Node.js 集成与回归测试（node:test）+ helpers
 ├── scripts/syntax-check.mjs
 ├── docs/
 │   ├── development.md         # 开发说明（API 规范、环境变量、结构）
@@ -59,7 +59,7 @@ npm start
 ```
 
 - API：`http://127.0.0.1:3000`（`/health`、`/api/projects`、`/console`）
-- 预览：`http://127.0.0.1:3001/p/{id}/`
+- 预览：`http://127.0.0.1:3001/p/{id}/`（Axure ZIP 自动展示安全页面目录，支持中文搜索和 1440/768/390 px 画布预览；预览宽度不等同真实设备模拟）
 
 ### Docker 独立开发环境
 
@@ -76,7 +76,7 @@ curl http://127.0.0.1:28088/health   # {"ok":true,...,"version":"0.3.0"}
 ## 测试
 
 ```bash
-npm test        # 116 个集成测试：API 回归 / 上传引擎 / 恶意 ZIP / 预览穿越 / 版本回滚 / 工作台
+npm test        # 全量集成与回归测试：上传引擎 / ZIP 安全 / 预览 / 版本回滚 / 工作台 / Axure 导航
 npm run lint    # node --check 全部 .mjs
 ```
 

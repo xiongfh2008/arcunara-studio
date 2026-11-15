@@ -11,6 +11,7 @@ import {
   inspectAxureProject,
   isAxureFileSet,
   matchNavHash,
+  matchNavSearch,
   renderNavPage
 } from "../apps/api/lib/axure.mjs";
 
@@ -325,4 +326,40 @@ test("navigation page never exposes metadata or hidden files", async () => {
   // HEAD works too
   const head = await server.preview(`/p/${axureId}/`, { method: "HEAD" });
   assert.equal(head.status, 200);
+});
+
+// --- RC4: page search and viewport width controls -------------------------
+
+test("RC4 search filters mixed-case, whitespace and full-width names", () => {
+  const pages = [
+    { name: "POBO 手续费管理", href: "/p/id/one.html" },
+    { name: "付款人名称管理", href: "/p/id/two.html" },
+    { name: "Zenus 配置", href: "/p/id/three.html" }
+  ];
+  assert.deepEqual(matchNavSearch(pages, "  ｐｏｂｏ  "), [0]);
+  assert.deepEqual(matchNavSearch(pages, "管理"), [0, 1]);
+  assert.deepEqual(matchNavSearch(pages, "zenUS"), [2]);
+  assert.deepEqual(matchNavSearch(pages, ""), [0, 1, 2]);
+  assert.deepEqual(matchNavSearch(pages, "未命中"), []);
+  assert.deepEqual(matchNavSearch(pages, null), [0, 1, 2]);
+});
+
+test("RC4 navigation offers safe search and four width presets without CSP relaxation", async () => {
+  const { html, csp } = await nav();
+  assert.match(html, /id="pageSearch" type="search"/);
+  assert.match(html, /id="filterCount"/);
+  assert.match(html, /id="noMatches"/);
+  assert.match(html, /var matchNavSearch = function matchNavSearch/);
+  assert.match(html, /pageSearch\.addEventListener\("input", filterPages\)/);
+  assert.match(html, /buttons\[i\]\.hidden = !visible\.has\(i\)/);
+  for (const width of [0, 1440, 768, 390]) {
+    assert.match(html, new RegExp('data-width="' + width + '"'));
+  }
+  assert.match(html, /widthButtons\.forEach/);
+  assert.match(html, /id="view" title="页面预览"/);
+  assert.match(csp, /sandbox allow-scripts/);
+  assert.match(csp, /frame-src 'self'/);
+  assert.ok(!csp.includes("allow-same-origin"));
+  assert.ok(!csp.includes("unsafe-eval"));
+  assert.ok(!/connect-src \*/.test(csp));
 });
