@@ -238,3 +238,38 @@ test("zip security rules stay enforced under raised quotas", async () => {
     await custom.cleanup();
   }
 });
+
+test("zip-inspect analyzes 2,800+ entry archives without listener warnings", async () => {
+  const { writeFileSync, mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { spawn } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+
+  const tool = fileURLToPath(new URL("../scripts/zip-inspect.mjs", import.meta.url));
+  const work = mkdtempSync(path.join(tmpdir(), "arcunara-inspect-"));
+  const zipPath = path.join(work, "big.zip");
+  writeFileSync(zipPath, entriesZip(2800)); // above the real export's 2,786
+
+  try {
+    const child = spawn(process.execPath, [tool, zipPath], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (c) => (stdout += c));
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (c) => (stderr += c));
+
+    const code = await new Promise((resolve, reject) => {
+      child.once("exit", resolve);
+      child.once("error", reject);
+    });
+
+    assert.equal(code, 0, `analyzer exited ${code}; stderr: ${stderr}`);
+    assert.ok(!stderr.includes("MaxListenersExceededWarning"), "no listener accumulation");
+    assert.match(stdout, /entries: 2800 \(files 2800, dirs 0\)/);
+    assert.match(stdout, /root index\.html: YES/);
+    assert.match(stdout, /security pre-checks ---\naliasing\/traversal\/structure problems: 0/);
+  } finally {
+    await fs.rm(work, { recursive: true, force: true });
+  }
+});

@@ -11,6 +11,10 @@
 import yauzl from "yauzl";
 import { collisionKey, isValidSegment } from "../apps/api/lib/pathsafety.mjs";
 
+const S_IFMT = 0o170000;
+const S_IFLNK = 0o120000;
+const S_IFREG = 0o100000;
+
 const DEFAULTS = { maxFiles: 2000, maxExtractBytes: 80 * 1024 * 1024, maxHtmlBytes: 2 * 1024 * 1024, maxDepth: 20, maxPathLength: 256 };
 const TESTENV = { maxFiles: 5000, maxExtractBytes: 128 * 1024 * 1024, maxHtmlBytes: 8 * 1024 * 1024, maxDepth: 20, maxPathLength: 256 };
 
@@ -29,13 +33,38 @@ function openZip(p) {
   );
 }
 
-function nextEntry(zf) {
-  return new Promise((resolve, reject) => {
-    zf.once("entry", resolve);
-    zf.once("end", () => resolve(null));
-    zf.once("error", reject);
-    zf.readEntry();
+// Persistent end/error listeners with a per-iteration once("entry") — the
+// same pattern as the production extractor. Real exports have thousands of
+// entries; per-iteration end/error once() listeners would accumulate and
+// trigger MaxListenersExceededWarning.
+function createEntryIterator(zf) {
+  let pending = null;
+
+  zf.on("end", () => {
+    if (pending) {
+      const p = pending;
+      pending = null;
+      p.resolve(null);
+    }
   });
+
+  zf.on("error", (err) => {
+    if (pending) {
+      const p = pending;
+      pending = null;
+      p.reject(err);
+    }
+  });
+
+  return () =>
+    new Promise((resolve, reject) => {
+      pending = { resolve, reject };
+      zf.once("entry", (entry) => {
+        pending = null;
+        resolve(entry);
+      });
+      zf.readEntry();
+    });
 }
 
 function entryStream(zf, entry) {
@@ -95,8 +124,11 @@ const zf = await openZip(zipPath).catch((e) => {
   process.exit(1);
 });
 
+const nextEntry = createEntryIterator(zf);
+
+try {
 let entry;
-while ((entry = await nextEntry(zf)) !== null) {
+while ((entry = await nextEntry()) !== null) {
   const raw = entry.fileName;
 
   if (entry.isEncrypted?.()) encryptedCount++;
@@ -166,6 +198,11 @@ while ((entry = await nextEntry(zf)) !== null) {
       }
     }
   }
+}
+} catch (err) {
+  zf.close();
+  console.error("zip analysis failed:", err.message);
+  process.exit(1);
 }
 zf.close();
 

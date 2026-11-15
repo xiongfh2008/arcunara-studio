@@ -213,7 +213,25 @@ test("workbench upload UX: busy states, double-submit guard, stage hints", async
 test("GET /api/limits powers the workbench quota display", async () => {
   const r = await server.api("/api/limits");
   assert.equal(r.status, 200);
-  assert.ok(r.json.limits.maxFiles >= 1);
-  assert.ok(r.json.limits.maxUploadBodyBytes >= r.json.limits.maxZipBytes === false || true); // independent caps
+
+  // Exact production defaults — a config regression changes these and fails.
+  assert.deepEqual(r.json.limits, {
+    maxJsonBodyBytes: 256 * 1024,
+    maxZipBytes: 20 * 1024 * 1024,
+    maxExtractBytes: 80 * 1024 * 1024,
+    maxFileBytes: 20 * 1024 * 1024,
+    maxHtmlBytes: 2 * 1024 * 1024,
+    maxFiles: 2000,
+    maxDepth: 20,
+    maxPathLength: 256,
+    maxDescriptionChars: 1000,
+    maxUploadBodyBytes: 24 * 1024 * 1024
+  });
+
+  // Real config invariants (would catch a misconfigured env override).
+  assert.ok(r.json.limits.maxUploadBodyBytes >= r.json.limits.maxZipBytes);
+  assert.ok(r.json.limits.maxFileBytes >= r.json.limits.maxHtmlBytes);
+  assert.ok(r.json.limits.maxExtractBytes >= r.json.limits.maxFileBytes);
+
   assert.ok(!JSON.stringify(r.json).toLowerCase().includes("token"));
 });
