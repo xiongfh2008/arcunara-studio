@@ -63,3 +63,11 @@ test("light workspace matches project-list and project-details design with funct
   // Do not re-introduce mocked top search or unused workspace switching.
   assert.doesNotMatch(html, /产品设计工作区|搜索项目、版本或分享/);
 });
+
+test("project creation accepts established manual or localhost cookie session", () => {
+  assert.match(html, /let isAuthorized = false;/);
+  assert.match(html, /isAuthorized = Boolean\(ok\);/);
+  assert.match(html, /if \(!isAuthorized\) \{ feedback\("请先完成连接", false\); return; \}/);
+  assert.doesNotMatch(html, /if \(!token\) \{ feedback\("请先连接 Token"/);
+  assert.match(html, /window\.__ARCU_LOCAL_AUTO_LOGIN__/);
+});
