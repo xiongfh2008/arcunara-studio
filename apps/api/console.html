@@ -336,7 +336,7 @@ table.versions td:nth-child(7){text-align:right}
   </div>
   <div class="create-dialog-content">
     <p class="hint" id="uploadProjectName">请选择需要更新的项目</p>
-    <p class="hint">支持 HTML、HTM、ZIP，文件大小以服务器实际配额为准。</p>
+    <p class="hint" id="versionUploadQuotaHint">支持 HTML、HTM、ZIP，文件大小以服务器实际配额为准。</p>
         <div class="row" style="margin-bottom:16px">
       <input type="file" id="versionFile" accept=".html,.htm,.zip" style="color:var(--text)">
       <button id="uploadVersionBtn">上传为新版本</button>
@@ -356,9 +356,10 @@ table.versions td:nth-child(7){text-align:right}
       <label class="field"><span>描述（可选）</span>
         <input type="text" id="newDesc" maxlength="1000">
       </label>
-      <label class="field"><span>上传 .html / .htm / .zip（≤20 MiB）</span>
+      <label class="field"><span id="newUploadLimitLabel">上传 .html / .htm / .zip（ZIP ≤20 MiB）</span>
         <input type="file" id="newFile" accept=".html,.htm,.zip">
       </label>
+      <p class="hint" id="archiveQuotaHint">正在连接服务器以获取文件数与解压配额…</p>
       <label class="field"><span>或直接粘贴 HTML（≤180 KB）</span>
         <textarea id="newHtml" placeholder="&lt;html&gt;...&lt;/html&gt;"></textarea>
       </label>
@@ -442,6 +443,14 @@ function fmtBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1048576) return `${(n / 1024).toFixed(1)} KiB`;
   return `${(n / 1048576).toFixed(1)} MiB`;
+}
+
+function renderUploadQuotas() {
+  const q = limits ?? FALLBACK_LIMITS;
+  $("newUploadLimitLabel").textContent = `上传 HTML / HTM / ZIP（ZIP ≤${fmtBytes(q.maxZipBytes)}）`;
+  const summary = `ZIP 内文件及目录总数 ≤${q.maxFiles} 项 · 单 HTML ≤${fmtBytes(q.maxHtmlBytes)} · 解压总大小 ≤${fmtBytes(q.maxExtractBytes)}`;
+  $("archiveQuotaHint").textContent = summary;
+  $("versionUploadQuotaHint").textContent = `支持 HTML、HTM、ZIP；${summary}`;
 }
 
 function fmtTime(iso) {
@@ -1065,6 +1074,7 @@ $("saveToken").addEventListener("click", async () => {
   try {
     const l = await api("/api/limits");
     limits = l.limits ?? null;
+    renderUploadQuotas();
     await loadProjects();
     setAuthorized(true);
     feedback(`已连接，共 ${projects.length} 个项目`, true);
@@ -1300,6 +1310,7 @@ if (window.__ARCU_LOCAL_AUTO_LOGIN__) {
     try {
       const data = await api("/api/limits");
       limits = data.limits ?? null;
+      renderUploadQuotas();
       await loadProjects();
       setAuthorized(true);
     } catch (err) {
