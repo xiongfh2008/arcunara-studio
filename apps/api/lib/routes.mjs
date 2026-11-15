@@ -82,7 +82,7 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
     const html = consoleHtml
       .replace("__ARCU_PREVIEW_PORT__", String(previewPort))
       .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl))
-      .replace("__ARCU_LOCAL_AUTO_LOGIN__", String(localSession.eligible(req)));
+      .replace("__ARCU_LOCAL_MODE_VALUE__", String(localSession.eligible(req)));
 
     const localCookie = localSession.issueCookie(req);
     res.writeHead(200, {
