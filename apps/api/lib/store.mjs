@@ -22,7 +22,14 @@ const SHARE_ID_RE = /^[0-9a-f]{16}$/;
 // (base64url, 43 chars); only its SHA-256 hash is persisted in meta.json.
 const SHARE_SECRET_BYTES = 32;
 
-function hashShareSecret(secret) {
+// RC6 deploy keys: dpk_{keyId}.{secret} — same crypto shape as share tokens,
+// scoped to one project and restricted to version upload + status queries.
+const DEPLOY_KEY_ID_RE = /^[0-9a-f]{16}$/;
+
+// RC6 content hash for upload idempotency (sha256 hex over the manifest).
+const CONTENT_HASH_RE = /^[0-9a-f]{64}$/;
+
+function hashSecret(secret) {
   return crypto.createHash("sha256").update(secret, "utf8").digest("hex");
 }
 
@@ -111,6 +118,55 @@ export function createStore(config) {
     return shareIndex.get(shareId) ?? null;
   }
 
+  // RC6 deploy-key index: keyId -> projectId, same stale-safe design as the
+  // share index (validation always re-reads fresh meta from disk).
+  const deployKeyIndex = new Map();
+  const projectDeployKeyIds = new Map();
+  let deployKeyIndexFullyBuilt = false;
+
+  function indexProjectDeployKeys(id, meta) {
+    for (const old of projectDeployKeyIds.get(id) ?? []) {
+      if (deployKeyIndex.get(old) === id) deployKeyIndex.delete(old);
+    }
+    const ids = new Set();
+    if (Array.isArray(meta.deployKeys)) {
+      for (const k of meta.deployKeys) {
+        if (k && typeof k.id === "string" && DEPLOY_KEY_ID_RE.test(k.id)) {
+          deployKeyIndex.set(k.id, id);
+          ids.add(k.id);
+        }
+      }
+    }
+    if (ids.size > 0 || Array.isArray(meta.deployKeys)) {
+      projectDeployKeyIds.set(id, ids);
+    }
+  }
+
+  async function rebuildDeployKeyIndex() {
+    deployKeyIndex.clear();
+    projectDeployKeyIds.clear();
+    const entries = await fs.readdir(root, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !UUID_RE.test(entry.name)) continue;
+      const meta = await readRawMeta(entry.name);
+      if (meta) indexProjectDeployKeys(entry.name, meta);
+    }
+
+    deployKeyIndexFullyBuilt = true;
+  }
+
+  // Locates the project owning a deploy key id (null when unknown).
+  async function locateDeployKeyProject(keyId) {
+    if (!DEPLOY_KEY_ID_RE.test(keyId)) return null;
+
+    if (!deployKeyIndex.has(keyId) && !deployKeyIndexFullyBuilt) {
+      await rebuildDeployKeyIndex();
+    }
+
+    return deployKeyIndex.get(keyId) ?? null;
+  }
+
   async function init() {
     await fs.mkdir(root, { recursive: true });
     await fs.mkdir(tmpDir, { recursive: true });
@@ -154,6 +210,7 @@ export function createStore(config) {
 
     await fs.rename(tmp, file);
     indexProjectShares(id, meta); // keep the share index in sync
+    indexProjectDeployKeys(id, meta); // keep the deploy-key index in sync
   }
 
   function isLegacy(meta) {
@@ -324,12 +381,56 @@ export function createStore(config) {
   // Publishes a fully validated staging directory as the next version.
   // Legacy v0.2.0 projects are transparently recorded: their root files
   // become version 1 (storage: "legacy-root"), untouched on disk.
-  async function addVersion(id, { stagedDir, stats }) {
+  //
+  // RC6 idempotency: when a content hash is supplied and matches the hash of
+  // the CURRENT version, the upload is a no-op — no new version directory is
+  // created. The check runs under the project lock, so concurrent/retried
+  // uploads of identical content collapse into one version safely. Re-adding
+  // content that matches a NON-current historical version still creates a
+  // new version (rolling back + re-deploying must move currentVersion).
+  async function addVersion(id, { stagedDir, stats, contentHash }) {
     return withLock(id, async () => {
       const meta = await readRawMeta(id);
 
       if (!meta) {
         throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      if (contentHash !== undefined && !CONTENT_HASH_RE.test(contentHash)) {
+        throw new ApiError(
+          400,
+          "Invalid content hash format",
+          "INVALID_CONTENT_HASH"
+        );
+      }
+
+      if (
+        contentHash &&
+        !isLegacy(meta) &&
+        meta.versions.length > 0
+      ) {
+        const current =
+          meta.versions.find((v) => v.version === meta.currentVersion) ||
+          meta.versions[meta.versions.length - 1];
+
+        if (current.contentHash === contentHash) {
+          // Identical content already live: discard the staged copy.
+          await fs.rm(stagedDir, { recursive: true, force: true }).catch(
+            () => {}
+          );
+
+          return {
+            projectId: id,
+            version: current.version,
+            createdAt: current.createdAt,
+            fileCount: current.fileCount,
+            totalSize: current.totalSize,
+            entryPoint: current.entryPoint,
+            previewPath: `/p/${id}/`,
+            currentVersion: current.version,
+            deduplicated: true
+          };
+        }
       }
 
       const versions = isLegacy(meta)
@@ -342,14 +443,20 @@ export function createStore(config) {
       await fs.mkdir(versionsDir(id), { recursive: true, mode: 0o700 });
       await fs.rename(stagedDir, versionDir(id, next));
 
-      versions.push({
+      const entry = {
         version: next,
         createdAt,
         fileCount: stats.fileCount,
         totalSize: stats.totalSize,
         entryPoint: stats.entryPoint,
         storage: "versions"
-      });
+      };
+
+      if (contentHash) {
+        entry.contentHash = contentHash;
+      }
+
+      versions.push(entry);
 
       meta.versions = versions;
       meta.currentVersion = next;
@@ -576,7 +683,7 @@ export function createStore(config) {
 
       const share = {
         id: shareId,
-        tokenHash: hashShareSecret(secret), // plaintext secret never stored
+        tokenHash: hashSecret(secret), // plaintext secret never stored
         createdAt,
         expiresAt: expires,
         enabled: true,
@@ -697,7 +804,7 @@ export function createStore(config) {
     }
 
     const expected = Buffer.from(share.tokenHash ?? "", "hex");
-    const actual = Buffer.from(hashShareSecret(secret), "hex");
+    const actual = Buffer.from(hashSecret(secret), "hex");
 
     if (
       expected.length !== 32 ||
@@ -740,6 +847,242 @@ export function createStore(config) {
     });
   }
 
+  // ---- RC6 deploy keys ---------------------------------------------------
+
+  function deployKeyView(k) {
+    // Status precedence: revoked > disabled > expired > active.
+    let status = "active";
+
+    if (k.revokedAt) {
+      status = "revoked";
+    } else if (k.enabled === false) {
+      status = "disabled";
+    } else if (k.expiresAt && Date.parse(k.expiresAt) <= Date.now()) {
+      status = "expired";
+    }
+
+    const view = {
+      id: k.id,
+      createdAt: k.createdAt,
+      expiresAt: k.expiresAt ?? null,
+      status,
+      enabled: k.enabled !== false,
+      revoked: Boolean(k.revokedAt),
+      lastUsedAt: k.lastUsedAt ?? null,
+      lastDeployVersion: k.lastDeployVersion ?? null,
+      lastDeployResult: k.lastDeployResult ?? null,
+      lastDeployAt: k.lastDeployAt ?? null
+    };
+
+    if (k.revokedAt) view.revokedAt = k.revokedAt;
+
+    return view;
+  }
+
+  async function createDeployKey(id, { expiresAt = null } = {}) {
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      let expires = null;
+
+      if (expiresAt !== null && expiresAt !== undefined) {
+        if (typeof expiresAt !== "string" || !Number.isFinite(Date.parse(expiresAt))) {
+          throw new ApiError(400, "Invalid expiresAt", "INVALID_EXPIRES_AT");
+        }
+
+        expires = new Date(Date.parse(expiresAt)).toISOString();
+
+        if (Date.parse(expires) <= Date.now()) {
+          throw new ApiError(
+            400,
+            "expiresAt must be in the future",
+            "INVALID_EXPIRES_AT"
+          );
+        }
+      }
+
+      const keyId = crypto.randomBytes(8).toString("hex");
+      const secret = crypto
+        .randomBytes(SHARE_SECRET_BYTES)
+        .toString("base64url");
+      const createdAt = now();
+
+      const key = {
+        id: keyId,
+        tokenHash: hashSecret(secret), // plaintext secret never stored
+        createdAt,
+        expiresAt: expires,
+        enabled: true,
+        lastUsedAt: null,
+        lastDeployVersion: null,
+        lastDeployResult: null,
+        lastDeployAt: null
+      };
+
+      if (!Array.isArray(meta.deployKeys)) meta.deployKeys = [];
+      meta.deployKeys.push(key);
+
+      try {
+        await writeMetaAtomic(id, meta);
+      } catch (err) {
+        meta.deployKeys.pop();
+        throw err;
+      }
+
+      return {
+        ...deployKeyView(key),
+        projectId: id,
+        // Returned exactly once; only the hash is persisted. The dpk_ prefix
+        // routes it to the deploy-key path in auth, never the admin token.
+        token: `dpk_${keyId}.${secret}`
+      };
+    });
+  }
+
+  async function listDeployKeys(id) {
+    const meta = await readRawMeta(id);
+
+    if (!meta) {
+      throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+    }
+
+    return {
+      projectId: id,
+      deployKeys: (Array.isArray(meta.deployKeys) ? meta.deployKeys : [])
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map(deployKeyView)
+    };
+  }
+
+  // Mutates one deploy key record under the project lock; fn receives the
+  // fresh key object from meta and may mutate it in place.
+  async function mutateDeployKey(id, keyId, fn) {
+    if (!DEPLOY_KEY_ID_RE.test(keyId)) {
+      throw new ApiError(404, "Deploy Key Not Found", "DEPLOY_KEY_NOT_FOUND");
+    }
+
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      const key = (Array.isArray(meta.deployKeys) ? meta.deployKeys : []).find(
+        (k) => k.id === keyId
+      );
+
+      if (!key) {
+        throw new ApiError(404, "Deploy Key Not Found", "DEPLOY_KEY_NOT_FOUND");
+      }
+
+      fn(key);
+      await writeMetaAtomic(id, meta);
+
+      return { projectId: id, ...deployKeyView(key) };
+    });
+  }
+
+  async function revokeDeployKey(id, keyId) {
+    return mutateDeployKey(id, keyId, (k) => {
+      k.revokedAt = now();
+    });
+  }
+
+  async function setDeployKeyEnabled(id, keyId, enabled) {
+    return mutateDeployKey(id, keyId, (k) => {
+      if (k.revokedAt) {
+        throw new ApiError(
+          400,
+          "Revoked deploy keys cannot be re-enabled",
+          "DEPLOY_KEY_REVOKED"
+        );
+      }
+
+      k.enabled = Boolean(enabled);
+    });
+  }
+
+  // Validates a deploy key for API access. Returns
+  // {projectId, key, reason:null} on success, {projectId, key, reason} on a
+  // located-but-denied key, or null when the key id is unknown.
+  async function validateDeployKey(keyId, secret) {
+    const projectId = await locateDeployKeyProject(keyId);
+
+    if (!projectId) {
+      return null;
+    }
+
+    const meta = await readRawMeta(projectId); // fresh read, never cached
+    const key = (Array.isArray(meta?.deployKeys) ? meta.deployKeys : []).find(
+      (k) => k.id === keyId
+    );
+
+    if (!key) {
+      return null;
+    }
+
+    const expected = Buffer.from(key.tokenHash ?? "", "hex");
+    const actual = Buffer.from(hashSecret(secret), "hex");
+
+    if (
+      expected.length !== 32 ||
+      actual.length !== expected.length ||
+      !crypto.timingSafeEqual(actual, expected)
+    ) {
+      return { projectId, key, reason: "bad_token" };
+    }
+
+    if (key.revokedAt) {
+      return { projectId, key, reason: "revoked" };
+    }
+
+    if (key.enabled === false) {
+      return { projectId, key, reason: "disabled" };
+    }
+
+    if (key.expiresAt && Date.parse(key.expiresAt) <= Date.now()) {
+      return { projectId, key, reason: "expired" };
+    }
+
+    return { projectId, key, reason: null };
+  }
+
+  // Records deploy-key usage (success or failure) for the workbench display.
+  // Runs under the project lock so it can never clobber a version publish.
+  async function recordDeployUse(projectId, keyId, { version, result }) {
+    if (!DEPLOY_KEY_ID_RE.test(keyId)) {
+      return;
+    }
+
+    await withLock(projectId, async () => {
+      const meta = await readRawMeta(projectId);
+
+      if (!meta) return;
+
+      const key = (Array.isArray(meta.deployKeys) ? meta.deployKeys : []).find(
+        (k) => k.id === keyId
+      );
+
+      if (!key) return;
+
+      key.lastUsedAt = now();
+      key.lastDeployAt = key.lastUsedAt;
+      key.lastDeployResult = result === "ok" ? "ok" : "failed";
+
+      if (result === "ok" && Number.isInteger(version)) {
+        key.lastDeployVersion = version;
+      }
+
+      await writeMetaAtomic(projectId, meta);
+    });
+  }
+
   return {
     root,
     tmpDir,
@@ -765,6 +1108,13 @@ export function createStore(config) {
     setShareEnabled,
     validateShare,
     recordShareAccess,
-    locateShareProject
+    locateShareProject,
+    createDeployKey,
+    listDeployKeys,
+    revokeDeployKey,
+    setDeployKeyEnabled,
+    validateDeployKey,
+    recordDeployUse,
+    locateDeployKeyProject
   };
 }

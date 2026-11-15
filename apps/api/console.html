@@ -212,6 +212,34 @@
       <tbody id="shareRows"></tbody>
     </table>
     <p id="noShares" class="hint">当前没有分享链接</p>
+
+    <h2 class="section">自动部署</h2>
+    <p class="hint">为本地 CLI（arcunara deploy / watch）创建项目级部署密钥。密钥只能向本项目上传新版本和查询部署状态，不能管理分享、修改项目设置或回滚版本。完整密钥仅在创建时展示一次，服务端只保存哈希。</p>
+    <div class="row" style="margin-bottom:10px">
+      <label class="field" style="margin:0"><span>密钥有效期</span>
+        <select id="deployKeyExpiry">
+          <option value="24">1 天</option>
+          <option value="168">7 天</option>
+          <option value="720">30 天</option>
+          <option value="0">永久</option>
+        </select>
+      </label>
+      <button id="createDeployKeyBtn">创建部署密钥</button>
+    </div>
+    <div id="newDeployKeyBox" class="hidden" style="margin-bottom:12px">
+      <div class="row">
+        <code id="newDeployKeyToken" style="word-break:break-all; background:var(--bg); padding:8px 10px; border-radius:8px; border:1px solid var(--border)"></code>
+        <button id="copyNewDeployKey" class="ghost">复制密钥</button>
+      </div>
+      <p class="hint">请立即复制并保存到安全位置（建议环境变量 ARCU_DEPLOY_KEY），刷新后无法再次查看。</p>
+    </div>
+    <p class="hint">CLI 用法（在本项目目录执行）：</p>
+    <pre id="cliHint" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:12px; white-space:pre-wrap; word-break:break-all;"></pre>
+    <p id="noDeployKeys" class="hint">当前没有部署密钥</p>
+    <table class="shares" id="deployKeyTable">
+      <thead><tr><th>密钥 ID</th><th>状态</th><th>创建时间</th><th>过期时间</th><th>最近使用</th><th>最近部署版本</th><th>最近部署结果</th><th>操作</th></tr></thead>
+      <tbody id="deployKeyRows"></tbody>
+    </table>
   </section>
 </main>
 
@@ -224,6 +252,7 @@ let projects = [];
 let selected = null;
 let versions = [];
 let shares = [];
+let deployKeys = [];
 let selectedVersion = null;
 let limits = null; // fetched from /api/limits after connect (null until then)
 let creating = false; // double-submit guards
@@ -418,6 +447,7 @@ async function selectProject(id) {
     selected = await api(`/api/projects/${id}`);
     versions = (await api(`/api/projects/${id}/versions`)).versions;
     shares = (await api(`/api/projects/${id}/shares`)).shares;
+    deployKeys = (await api(`/api/projects/${id}/deploy-keys`)).deployKeys;
     selectedVersion = versions.find((v) => v.isCurrent)?.version ?? null;
     renderDetail();
     renderProjects();
@@ -500,6 +530,7 @@ function renderDetail() {
   }
 
   renderShares();
+  renderDeployKeys();
 }
 
 const SHARE_STATUS_LABEL = {
@@ -624,6 +655,158 @@ async function revokeShare(s, btn) {
     setBusy(btn, false);
   }
 }
+
+// ---- 自动部署（RC6）-------------------------------------------------------
+
+const DEPLOY_KEY_STATUS_LABEL = {
+  active: "有效",
+  expired: "已过期",
+  revoked: "已撤销",
+  disabled: "已停用"
+};
+
+function deployKeyList() {
+  return Array.isArray(deployKeys) ? deployKeys : [];
+}
+
+function renderDeployKeys() {
+  if (!selected) return;
+
+  const rows = $("deployKeyRows");
+  rows.textContent = "";
+  const keys = deployKeyList();
+  $("noDeployKeys").hidden = keys.length !== 0;
+
+  $("cliHint").textContent = [
+    "# 初始化本地目录与本项目关联（生成 .arcunara.json，不保存密钥）",
+    `node packages/cli/arcunara.mjs init --project ${selected.id} --api ${window.location.origin}`,
+    "",
+    "# 发布（密钥通过环境变量提供，不进入命令历史）",
+    "#   PowerShell: $env:ARCU_DEPLOY_KEY = \"dpk_...\"",
+    "#   Linux/macOS: export ARCU_DEPLOY_KEY=dpk_...",
+    "arcunara deploy ./dist",
+    "",
+    "# 监听文件变化自动发布",
+    "arcunara watch ./dist"
+  ].join("\n");
+
+  for (const k of keys) {
+    const tr = document.createElement("tr");
+
+    const tdId = document.createElement("td");
+    tdId.textContent = k.id.slice(0, 8) + "…";
+    tr.appendChild(tdId);
+
+    const tdStatus = document.createElement("td");
+    const tag = document.createElement("span");
+    tag.className = `tag ${k.status}`;
+    tag.textContent = DEPLOY_KEY_STATUS_LABEL[k.status] ?? k.status;
+    tdStatus.appendChild(tag);
+    tr.appendChild(tdStatus);
+
+    for (const text of [
+      fmtTime(k.createdAt),
+      k.expiresAt ? fmtTime(k.expiresAt) : "永久",
+      fmtTime(k.lastUsedAt),
+      k.lastDeployVersion != null ? `v${k.lastDeployVersion}` : "-",
+      k.lastDeployResult
+        ? (k.lastDeployResult === "ok" ? "成功" : "失败")
+        : "-"
+    ]) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+
+    const tdOps = document.createElement("td");
+    tdOps.className = "row";
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "ghost";
+    toggleBtn.textContent = k.enabled && !k.revoked ? "停用" : "启用";
+    toggleBtn.addEventListener("click", () => toggleDeployKey(k, toggleBtn));
+    toggleBtn.disabled = k.revoked;
+    tdOps.appendChild(toggleBtn);
+
+    const revokeBtn = document.createElement("button");
+    revokeBtn.className = "danger";
+    revokeBtn.textContent = "撤销";
+    revokeBtn.disabled = k.revoked;
+    revokeBtn.addEventListener("click", () => revokeDeployKey(k, revokeBtn));
+    tdOps.appendChild(revokeBtn);
+
+    tr.appendChild(tdOps);
+    rows.appendChild(tr);
+  }
+}
+
+async function toggleDeployKey(k, btn) {
+  const disabling = k.enabled && !k.revoked;
+  if (disabling && !window.confirm(`确定停用部署密钥 ${k.id.slice(0, 8)}…？停用后立即无法上传（可再启用）。`)) return;
+  if (!disabling && !window.confirm(`确定启用部署密钥 ${k.id.slice(0, 8)}…？`)) return;
+
+  setBusy(btn, true, "处理中…");
+  try {
+    await api(`/api/projects/${selected.id}/deploy-keys/${k.id}/${disabling ? "disable" : "enable"}`, { method: "POST" });
+    feedback(disabling ? "部署密钥已停用" : "部署密钥已启用", true);
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`操作失败：${err.message}`, false);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+async function revokeDeployKey(k, btn) {
+  if (!window.confirm(`确定撤销部署密钥 ${k.id.slice(0, 8)}…？撤销后立即失效，使用该密钥的 CLI / CI 将无法再发布。`)) return;
+
+  setBusy(btn, true, "处理中…");
+  try {
+    await api(`/api/projects/${selected.id}/deploy-keys/${k.id}/revoke`, { method: "POST" });
+    feedback("部署密钥已撤销", true);
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`撤销失败：${err.message}`, false);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+$("createDeployKeyBtn").addEventListener("click", async () => {
+  const btn = $("createDeployKeyBtn");
+  if (btn.disabled) return;
+  if (!selected) { feedback("请先选择项目", false); return; }
+
+  setBusy(btn, true, "创建中…");
+  try {
+    const hours = Number($("deployKeyExpiry").value);
+    const k = await api(`/api/projects/${selected.id}/deploy-keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(hours > 0 ? { expiresInHours: hours } : {})
+    });
+    feedback("部署密钥已创建（完整密钥仅展示这一次）", true);
+    $("newDeployKeyBox").classList.remove("hidden");
+    $("newDeployKeyToken").textContent = k.token;
+    $("newDeployKeyToken").dataset.key = k.token;
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`创建失败：${err.message}`, false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+
+$("copyNewDeployKey").addEventListener("click", async () => {
+  const value = $("newDeployKeyToken").dataset.key;
+  if (!value) { feedback("没有可复制的密钥", false); return; }
+  try {
+    await navigator.clipboard.writeText(value);
+    feedback("部署密钥已复制", true);
+  } catch {
+    window.prompt("复制部署密钥：", value);
+  }
+});
 
 $("saveToken").addEventListener("click", async () => {
   token = $("tokenInput").value.trim();

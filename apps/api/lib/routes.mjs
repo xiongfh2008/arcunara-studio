@@ -12,6 +12,7 @@ import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
 import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
+import { parseDeployToken } from "./auth.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
@@ -21,9 +22,31 @@ const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
 const SHARE_ACTION_RE = new RegExp(
   `^/api/projects/${PROJECT_ID}/shares/([0-9a-f]{16})/(revoke|enable|disable)$`
 );
+const DEPLOY_KEYS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/deploy-keys$`);
+const DEPLOY_KEY_ACTION_RE = new RegExp(
+  `^/api/projects/${PROJECT_ID}/deploy-keys/([0-9a-f]{16})/(revoke|enable|disable)$`
+);
 
 // The legacy JSON html cap — intentionally kept byte-identical with v0.2.0.
 const LEGACY_HTML_BYTES = 180000;
+
+// RC6: deploy keys are restricted to a fixed, exact-match allowlist scoped
+// to the key's own project. Anything else — including every admin-only
+// route (project creation, PATCH, rollback, share management, deploy-key
+// management, other projects' endpoints) — is denied. Exact equality (not
+// prefix matching) prevents path-shape bypasses such as
+// /api/projects/{otherId}/versions or suffixed paths.
+function deployKeyAllowed(method, pathname, projectId) {
+  const versionsPath = `/api/projects/${projectId}/versions`;
+  const detailPath = `/api/projects/${projectId}`;
+
+  return (
+    (method === "GET" && pathname === "/api/limits") ||
+    (method === "POST" && pathname === versionsPath) ||
+    (method === "GET" &&
+      (pathname === versionsPath || pathname === detailPath))
+  );
+}
 
 export function createApiHandler({ config, store, auth, version, getPreviewPort }) {
   // The internal workbench page: static, contains no secrets (the operator
@@ -94,7 +117,44 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
         return serveConsole(req, res);
       }
 
-      if (!pathname.startsWith("/api/") || !auth(req)) {
+      // RC6: deploy-key mode. The dpk_ prefix routes to the restricted
+      // project-scoped guard; the admin token path below is unchanged and
+      // never widened. A malformed or invalid deploy token is always 401.
+      const deployToken = parseDeployToken(req.headers.authorization);
+
+      if (deployToken) {
+        if (!pathname.startsWith("/api/")) {
+          return sendJson(res, 401, { error: "Unauthorized" });
+        }
+
+        const verdict = await store.validateDeployKey(
+          deployToken.keyId,
+          deployToken.secret
+        );
+
+        if (!verdict || verdict.reason === "bad_token") {
+          return sendJson(res, 401, {
+            error: "Unauthorized",
+            code: "DEPLOY_KEY_INVALID"
+          });
+        }
+
+        if (verdict.reason) {
+          return sendJson(res, 401, {
+            error: `Deploy key ${verdict.reason}`,
+            code: `DEPLOY_KEY_${verdict.reason.toUpperCase()}`
+          });
+        }
+
+        if (!deployKeyAllowed(req.method, pathname, verdict.projectId)) {
+          return sendJson(res, 403, {
+            error: "Deploy key is not allowed to perform this operation",
+            code: "DEPLOY_KEY_FORBIDDEN"
+          });
+        }
+
+        req.deployKey = { projectId: verdict.projectId, keyId: verdict.key.id };
+      } else if (!pathname.startsWith("/api/") || !auth(req)) {
         return sendJson(res, 401, { error: "Unauthorized" });
       }
 
@@ -120,7 +180,14 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
         const id = versionsMatch[1];
 
         if (req.method === "POST") {
-          return await handleVersionCreate(req, res, { config, store, id });
+          try {
+            return await handleVersionCreate(req, res, { config, store, id });
+          } catch (err) {
+            // Any failed deploy-key upload (validation, quota, staging...)
+            // is recorded for the workbench display.
+            await recordDeployUseIfKeyed(req, store, id, null, "failed");
+            throw err;
+          }
         }
 
         if (req.method === "GET") {
@@ -186,29 +253,7 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
 
         if (req.method === "POST") {
           const payload = await readJsonPayload(req, config.limits);
-          let expiresAt = null;
-
-          if (payload.expiresAt !== undefined && payload.expiresAt !== null) {
-            if (typeof payload.expiresAt !== "string") {
-              throw new ApiError(400, "Invalid expiresAt", "INVALID_EXPIRES_AT");
-            }
-            expiresAt = payload.expiresAt;
-          } else if (typeof payload.expiresInHours === "number") {
-            if (
-              !Number.isFinite(payload.expiresInHours) ||
-              payload.expiresInHours <= 0 ||
-              payload.expiresInHours > 24 * 365
-            ) {
-              throw new ApiError(
-                400,
-                "Invalid expiresInHours",
-                "INVALID_EXPIRES_AT"
-              );
-            }
-            expiresAt = new Date(
-              Date.now() + payload.expiresInHours * 3600 * 1000
-            ).toISOString();
-          }
+          const expiresAt = await resolveExpiry(payload);
 
           const share = await store.createShare(id, { expiresAt });
           return sendJson(res, 201, share);
@@ -231,6 +276,42 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
         return sendJson(res, 200, await store.setShareEnabled(id, shareId, false));
       }
 
+      // RC6: deploy-key management (admin only — the deploy-key guard never
+      // reaches here because the exact-match allowlist excludes this path).
+      const deployKeysMatch = DEPLOY_KEYS_RE.exec(pathname);
+
+      if (deployKeysMatch) {
+        const id = deployKeysMatch[1];
+
+        if (req.method === "GET") {
+          return sendJson(res, 200, await store.listDeployKeys(id));
+        }
+
+        if (req.method === "POST") {
+          const payload = await readJsonPayload(req, config.limits);
+          const expiresAt = await resolveExpiry(payload);
+
+          const key = await store.createDeployKey(id, { expiresAt });
+          return sendJson(res, 201, key);
+        }
+      }
+
+      const deployKeyActionMatch = DEPLOY_KEY_ACTION_RE.exec(pathname);
+
+      if (deployKeyActionMatch && req.method === "POST") {
+        const [, id, keyId, action] = deployKeyActionMatch;
+
+        if (action === "revoke") {
+          return sendJson(res, 200, await store.revokeDeployKey(id, keyId));
+        }
+
+        if (action === "enable") {
+          return sendJson(res, 200, await store.setDeployKeyEnabled(id, keyId, true));
+        }
+
+        return sendJson(res, 200, await store.setDeployKeyEnabled(id, keyId, false));
+      }
+
       return sendJson(res, 404, { error: "Not Found" });
     } catch (err) {
       sendError(res, err);
@@ -245,6 +326,32 @@ function cleanDescription(raw, limits) {
 
   const value = raw.trim().slice(0, limits.maxDescriptionChars);
   return value.length > 0 ? value : undefined;
+}
+
+// Shared expiresAt/expiresInHours parsing for share and deploy-key creation
+// (previously inline in the share route; behavior unchanged).
+function resolveExpiry(payload) {
+  if (payload.expiresAt !== undefined && payload.expiresAt !== null) {
+    if (typeof payload.expiresAt !== "string") {
+      throw new ApiError(400, "Invalid expiresAt", "INVALID_EXPIRES_AT");
+    }
+    return payload.expiresAt;
+  }
+
+  if (typeof payload.expiresInHours === "number") {
+    if (
+      !Number.isFinite(payload.expiresInHours) ||
+      payload.expiresInHours <= 0 ||
+      payload.expiresInHours > 24 * 365
+    ) {
+      throw new ApiError(400, "Invalid expiresInHours", "INVALID_EXPIRES_AT");
+    }
+    return new Date(
+      Date.now() + payload.expiresInHours * 3600 * 1000
+    ).toISOString();
+  }
+
+  return null;
 }
 
 async function readJsonPayload(req, limits) {
@@ -377,7 +484,18 @@ async function handleMultipartCreate(req, res, { config, store }) {
 
 // v0.3.0: upload a new version (multipart file or legacy JSON html).
 // Failure at any validation stage never changes the current version.
+// RC6: an optional X-Arcunara-Content-Hash header enables idempotent
+// re-deploys (identical content to the current version is a no-op); when
+// the caller authenticated with a deploy key, its usage is recorded for
+// the workbench (success and failure). Deploy-key uploads never touch
+// previewEnabled or any other project setting.
 async function handleVersionCreate(req, res, { config, store, id }) {
+  const rawHash = req.headers["x-arcunara-content-hash"];
+  const contentHash =
+    typeof rawHash === "string" && rawHash.trim() !== ""
+      ? rawHash.trim().toLowerCase()
+      : undefined;
+
   const meta = await store.readRawMeta(id);
 
   if (!meta) {
@@ -396,7 +514,8 @@ async function handleVersionCreate(req, res, { config, store, id }) {
       const staged = await stageFromUpload(file, { store, limits: config.limits });
 
       try {
-        const view = await store.addVersion(id, staged);
+        const view = await store.addVersion(id, { ...staged, contentHash });
+        await recordDeployUseIfKeyed(req, store, id, view.version, "ok");
         return sendJson(res, 201, view);
       } catch (err) {
         await fs.rm(staged.stagedDir, { recursive: true, force: true }).catch(() => {});
@@ -422,7 +541,8 @@ async function handleVersionCreate(req, res, { config, store, id }) {
     const staged = await stageJsonHtml(html, store);
 
     try {
-      const view = await store.addVersion(id, staged);
+      const view = await store.addVersion(id, { ...staged, contentHash });
+      await recordDeployUseIfKeyed(req, store, id, view.version, "ok");
       return sendJson(res, 201, view);
     } catch (err) {
       await fs.rm(staged.stagedDir, { recursive: true, force: true }).catch(() => {});
@@ -434,6 +554,17 @@ async function handleVersionCreate(req, res, { config, store, id }) {
     error: "Use application/json or multipart/form-data",
     code: "UNSUPPORTED_MEDIA_TYPE"
   });
+}
+
+// Best-effort deploy-key usage bookkeeping (RC6). No-op for admin calls.
+async function recordDeployUseIfKeyed(req, store, projectId, version, result) {
+  if (!req.deployKey || req.deployKey.projectId !== projectId) {
+    return;
+  }
+
+  await store
+    .recordDeployUse(projectId, req.deployKey.keyId, { version, result })
+    .catch(() => {});
 }
 
 async function handleRollback(req, res, { config, store, id }) {

@@ -1,0 +1,26 @@
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #f5f7fb;
+  color: #1c2430;
+}
+
+main {
+  max-width: 640px;
+  margin: 12vh auto;
+  padding: 24px 32px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+code {
+  background: #eef1f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+#status {
+  color: #0a7d4f;
+  font-weight: 600;
+}

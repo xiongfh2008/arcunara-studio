@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
-const ROOTS = ["apps", "scripts", "tests"];
+const ROOTS = ["apps", "scripts", "tests", "packages"];
 
 function collectMjsFiles(dir) {
   const files = [];
