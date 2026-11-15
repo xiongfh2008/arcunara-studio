@@ -443,17 +443,34 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
 </div>
 </div>
 </dialog>
-<dialog class="create-dialog" id="versionUploadDialog" aria-labelledby="versionUploadHeading">
+<dialog class="create-dialog version-modal" id="versionUploadDialog" aria-labelledby="versionUploadHeading">
   <div class="create-dialog-header">
     <h2 id="versionUploadHeading">上传新版本</h2>
     <button type="button" id="closeUploadDialog" class="ghost" aria-label="关闭版本上传弹窗">关闭</button>
   </div>
   <div class="create-dialog-content">
     <p class="hint" id="uploadProjectName">请选择需要更新的项目</p>
-    <p class="hint" id="versionUploadQuotaHint">支持 HTML、HTM、ZIP，文件大小以服务器实际配额为准。</p>
-        <div class="row" style="margin-bottom:16px">
-      <input type="file" id="versionFile" accept=".html,.htm,.zip" style="color:var(--text)">
-      <button id="uploadVersionBtn">上传为新版本</button>
+    <div class="upload-mode-tabs" aria-label="上传方式">
+      <button type="button" data-upload-mode="file" aria-selected="true">上传文件</button>
+      <button type="button" data-upload-mode="html" aria-selected="false">粘贴 HTML</button>
+    </div>
+    <div id="versionFilePanel">
+      <div class="upload-dropzone" id="versionDropzone">
+        <svg class="ui-icon"><use href="#ui-upload"/></svg>
+        <strong>拖拽文件到此处，或点击选择文件</strong>
+        <input type="file" id="versionFile" accept=".html,.htm,.zip" aria-label="选择要上传的 HTML、HTM 或 ZIP 文件">
+        <span class="hint" id="versionFileName">支持 HTML / HTM / ZIP 文件</span>
+      </div>
+    </div>
+    <div id="versionHtmlPanel" class="hidden">
+      <label class="field"><span>粘贴完整 HTML（最多 180 KB）</span>
+        <textarea id="versionHtml" class="version-html-area" placeholder="&lt;html&gt;...&lt;/html&gt;"></textarea>
+      </label>
+    </div>
+    <p class="hint" id="versionUploadQuotaHint">上传限制以服务器实际配额为准。</p>
+    <div class="upload-footer">
+      <button type="button" id="cancelVersionUpload" class="ghost">取消</button>
+      <button type="button" id="uploadVersionBtn">开始上传</button>
     </div>
   </div>
 </dialog>
@@ -1397,21 +1414,32 @@ $("togglePreviewBtn").addEventListener("click", async () => {
 
 $("uploadVersionBtn").addEventListener("click", async () => {
   const btn = $("uploadVersionBtn");
-
-  if (btn.disabled) return; // double-submit guard
+  if (btn.disabled) return;
   if (!selected) { feedback("请先选择项目", false); return; }
-  const file = $("versionFile").files[0];
-  if (!file) { feedback("请选择要上传的文件", false); return; }
+  const file = versionUploadMode === "file" ? $("versionFile").files[0] : null;
+  const html = versionUploadMode === "html" ? $("versionHtml").value.trim() : "";
+  if (versionUploadMode === "file" && !file) { feedback("请选择要上传的文件", false); return; }
+  if (versionUploadMode === "html" && !html) { feedback("请先粘贴 HTML 内容", false); return; }
 
   uploadingVersion = true;
-  setBusy(btn, true, "上传中…");
-
+  setBusy(btn, true, file ? "上传中…" : "处理中…");
   try {
-    const fd = new FormData();
-    fd.set("file", file, file.name);
-    const v = await api(`/api/projects/${selected.id}/versions`, { method: "POST", body: fd });
-    feedback(`已发布 v${v.version}，分享链接继续指向当前版本`, true);
+    let v;
+    if (file) {
+      const fd = new FormData();
+      fd.set("file", file, file.name);
+      v = await api(`/api/projects/${selected.id}/versions`, { method: "POST", body: fd });
+    } else {
+      v = await api(`/api/projects/${selected.id}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ html })
+      });
+    }
+    feedback(`已发布 v${v.version}，预览及分享链接将指向当前版本`, true);
     $("versionFile").value = "";
+    $("versionHtml").value = "";
+    $("versionFileName").textContent = "支持 HTML / HTM / ZIP 文件";
     $("versionUploadDialog").close();
     await selectProject(selected.id);
     await loadProjects();
