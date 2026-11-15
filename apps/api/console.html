@@ -322,7 +322,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
         <section class="card inspector-section">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 自动部署</h3><button type="button" id="openDeployPanel" class="small-link">配置部署 ›</button></div>
           <div class="inspector-keyline"><span>有效部署密钥</span><span id="deployStatus" class="status-chip off">未配置</span></div>
-          <div class="inspector-keyline"><span>最近 CLI 发布</span><strong id="latestDeployTime">暂无</strong></div>
+          <div class="inspector-keyline"><span>最近密钥使用</span><strong id="latestDeployTime">暂无</strong></div>
           <div class="inspector-command">arcunara deploy ./dist <button type="button" class="icon-action" id="copyCliCommand" title="复制 CLI 命令">复制</button></div>
         </section>
         <div class="inspector-bottom">
@@ -505,6 +505,7 @@ let savingInfo = false;
 let creatingShare = false;
 let activeTab = "versions";
 let activeModule = "projects";
+let versionUploadMode = "file";
 let feedbackTimer = null;
 
 const FALLBACK_LIMITS = {
@@ -714,6 +715,11 @@ function renderProjects() {
     open.addEventListener("click", () => selectProject(p.id));
     nameCell.appendChild(open);
 
+    const typeCell = document.createElement("span");
+    typeCell.className = "project-type";
+    typeCell.textContent = selected?.id === p.id && selected?.isAxure
+      ? "Axure ZIP" : "HTML / ZIP";
+
     const versionCell = document.createElement("span");
     versionCell.className = "project-version";
     versionCell.textContent = "v" + p.currentVersion;
@@ -726,19 +732,7 @@ function renderProjects() {
     statusCell.className = "status-chip" + (p.previewEnabled === false ? " off" : "");
     statusCell.textContent = p.previewEnabled === false ? "停用" : "启用";
 
-    const actions = document.createElement("button");
-    actions.type = "button";
-    actions.className = "icon-action";
-    actions.textContent = "•••";
-    actions.title = "查看项目设置";
-    actions.setAttribute("aria-label", "管理项目 " + p.name);
-    actions.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      await selectProject(p.id);
-      activateModule("settings");
-    });
-
-    li.append(nameCell, versionCell, dateCell, statusCell, actions);
+    li.append(nameCell, typeCell, versionCell, dateCell, statusCell);
     li.addEventListener("click", (event) => {
       if (event.target.closest("button")) return;
       selectProject(p.id);
@@ -771,7 +765,17 @@ function kv(label, value) {
 function renderDetail() {
   $("detailCard").classList.remove("hidden");
   $("projectHeading").textContent = selected.name;
-  $("projectIdentifier").textContent = (selected.isAxure ? "Axure 原型" : "HTML / ZIP 原型") + " · 更新于 " + fmtTime(selected.updatedAt);
+  $("projectIdentifier").textContent = selected.id.slice(0, 8) + "…";
+  $("projectIdentifier").title = selected.id;
+  $("summaryEntry").textContent = selected.entryPoint;
+  $("summaryUpdated").textContent = fmtTime(selected.updatedAt);
+  $("settingsName").textContent = selected.name;
+  $("settingsName").title = selected.name;
+  $("settingsDesc").textContent = selected.description || "未填写";
+  $("settingsDesc").title = selected.description || "未填写";
+  $("previewQuickToggle").textContent = selected.previewEnabled === false ? "已停用 · 启用" : "已启用 · 停用";
+  $("summaryPreviewUrl").textContent = selected.previewEnabled === false ? "预览已停用" : previewUrlFor(selected.id);
+  $("summaryPreviewUrl").title = selected.previewEnabled === false ? "" : previewUrlFor(selected.id);
   $("summaryVersion").textContent = "v" + selected.currentVersion;
   $("summaryFiles").textContent = String(selected.fileCount);
   $("summarySize").textContent = fmtBytes(selected.totalSize);
@@ -837,8 +841,39 @@ function renderDetail() {
     rows.appendChild(tr);
   }
 
+  renderRecentVersions();
   renderShares();
   renderDeployKeys();
+}
+
+function renderRecentVersions() {
+  const area = $("recentVersionList");
+  area.textContent = "";
+  for (const item of [...versions].sort((a,b) => b.version - a.version).slice(0, 3)) {
+    const line = document.createElement("div");
+    line.className = "version-mini-row";
+    const name = document.createElement("strong");
+    name.textContent = "v" + item.version;
+    line.appendChild(name);
+    if (item.isCurrent) {
+      const tag = document.createElement("span");
+      tag.className = "tag current";
+      tag.textContent = "当前";
+      line.appendChild(tag);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "small-link";
+      btn.textContent = "回滚";
+      btn.title = "将当前版本切换到 v" + item.version;
+      btn.addEventListener("click", () => {
+        selectedVersion = item.version;
+        $("rollbackBtn").click();
+      });
+      line.appendChild(btn);
+    }
+    area.appendChild(line);
+  }
 }
 
 const SHARE_STATUS_LABEL = {
@@ -863,6 +898,12 @@ function renderShares() {
 
   const totalVisits = shares.reduce((m, s) => m + (s.accessCount ?? 0), 0);
   $("shareStats").textContent = `项目分享总访问次数：${totalVisits}`;
+  const activeShares = shares.filter(s => s.status === "active").length;
+  $("activeShareCount").textContent = String(activeShares);
+  $("shareVisitCount").textContent = String(totalVisits);
+  $("shareOverviewNote").textContent = shares.length
+    ? `共 ${shares.length} 条分享链接（含已停用、过期和撤销）`
+    : "尚未创建分享链接";
 
   for (const s of shares) {
     const tr = document.createElement("tr");
@@ -984,6 +1025,13 @@ function renderDeployKeys() {
   rows.textContent = "";
   const keys = deployKeyList();
   $("noDeployKeys").hidden = keys.length !== 0;
+  const activeKeys = keys.filter(k => k.status === "active");
+  $("deployStatus").textContent = activeKeys.length ? `有效 · ${activeKeys.length}` : "未配置有效密钥";
+  $("deployStatus").className = "status-chip" + (activeKeys.length ? "" : " off");
+  const latestKey = keys.filter(k => k.lastUsedAt).sort((a, b) =>
+    new Date(b.lastUsedAt) - new Date(a.lastUsedAt))[0];
+  $("latestDeployTime").textContent = latestKey
+    ? fmtTime(latestKey.lastUsedAt) : "暂无";
 
   $("cliHint").textContent = [
     "# 初始化本地目录与本项目关联（生成 .arcunara.json，不保存密钥）",
