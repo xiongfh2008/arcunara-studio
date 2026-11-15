@@ -375,6 +375,8 @@ table.versions td:nth-child(7){text-align:right}
 
 // Token lives ONLY in this variable — never in storage, never in the DOM.
 let token = null;
+// Shared connection state: supports either a manual bearer token or a local HttpOnly session.
+let isAuthorized = false;
 let projects = [];
 let selected = null;
 let versions = [];
@@ -526,6 +528,7 @@ function setBusy(btn, busy, busyLabel) {
 }
 
 function setAuthorized(ok) {
+  isAuthorized = Boolean(ok);
   $("authBadge").textContent = ok
     ? (window.__ARCU_LOCAL_AUTO_LOGIN__ && !token ? "本地已连接" : "已连接")
     : "连接 API";
@@ -1094,7 +1097,7 @@ $("createBtn").addEventListener("click", async () => {
   const file = $("newFile").files[0];
   const html = $("newHtml").value;
 
-  if (!token) { feedback("请先连接 Token", false); return; }
+  if (!isAuthorized) { feedback("请先完成连接", false); return; }
   if (!name) { feedback("请输入项目名称", false); return; }
 
   creating = true;
