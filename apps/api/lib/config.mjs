@@ -95,14 +95,29 @@ export function loadConfig(env = process.env) {
     maxUploadBodyBytes: intFromEnv(env, "ARCU_MAX_UPLOAD_BODY_BYTES", 24 * MIB)
   };
 
+  // Local convenience is opt-in and must never silently turn on in Docker/VPS.
+  // Both listeners must bind exactly to IPv4 loopback before issuing a local
+  // browser session. The admin token is still required for CLI and remote use.
+  const apiHost = env.ARCU_API_HOST || "0.0.0.0";
+  const previewHost = env.ARCU_PREVIEW_HOST || "0.0.0.0";
+  const localFlag = env.ARCU_LOCAL_AUTO_LOGIN || "0";
+  if (localFlag !== "0" && localFlag !== "1") {
+    throw new Error("ARCU_LOCAL_AUTO_LOGIN must be 0 or 1");
+  }
+  const localAutoLogin = localFlag === "1";
+  if (localAutoLogin && (apiHost !== "127.0.0.1" || previewHost !== "127.0.0.1")) {
+    throw new Error("ARCU_LOCAL_AUTO_LOGIN requires both API and preview to bind 127.0.0.1");
+  }
+
   return {
+    localAutoLogin,
     store: env.ARCU_DATA_DIR || "/app/data",
     token,
     tokenFile,
     apiPort: portFromEnv(env, "ARCU_API_PORT", 3000),
-    apiHost: env.ARCU_API_HOST || "0.0.0.0",
+    apiHost,
     previewPort: portFromEnv(env, "ARCU_PREVIEW_PORT", 3001),
-    previewHost: env.ARCU_PREVIEW_HOST || "0.0.0.0",
+    previewHost,
     previewPublicBaseUrl: previewPublicBaseUrlFromEnv(env),
     limits
   };
