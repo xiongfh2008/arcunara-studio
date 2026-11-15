@@ -93,6 +93,13 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
         return sendJson(res, 401, { error: "Unauthorized" });
       }
 
+      if (req.method === "GET" && pathname === "/api/limits") {
+        // Active upload quotas for the workbench's quota-aware error hints.
+        // Values are configuration, not secrets; auth required to avoid
+        // unfingerprinted probing.
+        return sendJson(res, 200, { limits: config.limits });
+      }
+
       if (req.method === "GET" && pathname === "/api/projects") {
         const projects = await store.listProjects();
         return sendJson(res, 200, { projects });

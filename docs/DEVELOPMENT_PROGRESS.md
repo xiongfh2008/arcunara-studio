@@ -110,3 +110,12 @@
 - **工作台预览 URL 修复**：新增 `ARCU_PREVIEW_PUBLIC_BASE_URL`（区分内部监听地址与浏览器访问地址）；未设置时保持本地体验（同主机 + 实际监听端口，支持 port 0）；compose 默认注入 `http://127.0.0.1:28089`（SSH 转发可用）；预览链接永不携带 Token；非法配置拒绝启动
 - **Axure 兼容性预检查**（真实 Chromium，Axure 风格 + 敏感 API 探测夹具）：多页跳转/相对路径/外部 JS+CSS/图片/同源字体/iframe 全部通过；eval、Web Storage、SW、fetch/XHR 被安全边界阻止（如实记录）；发现并修复**字体加载阻断**（opaque origin 需要 ACAO:* + font-src 放宽，已用真实 TTF 验证解析与渲染）；**真实 RP11 导出验收仍未完成**
 - **测试计数统一**：全量重跑 94/94 通过（修复此前文档 82/83 不一致）；新增部署配置回归测试 `deploy-config.test.mjs`（7 项）与预览链接生成测试（8 项）
+
+## RC2：真实 Axure ZIP 兼容性修复 — ✅ 已完成
+
+- **样本分析**：新增 `scripts/zip-inspect.mjs`（通用 ZIP 结构/配额余量/安全预检/JS 敏感 API 扫描工具）；真实 POBO 样本实测 2,786 条目、72.62 MiB、单层包装目录含唯一 index.html、无穿越/碰撞/符号链接、最大路径 81 字符
+- **配额**：生产默认不变（2000/2MiB/80MiB）；compose 测试环境传 `ARCU_MAX_FILES=5000`、`ARCU_MAX_HTML_BYTES=8388608`、`ARCU_MAX_EXTRACT_BYTES=134217728`（单文件与 ZIP 压缩限保持 20 MiB）；新增 `GET /api/limits` 供工作台显示当前配额
+- **上传引擎修复**：zipextract 条目迭代器改为持久监听（2,786 条目不再累积 once 监听器）
+- **工作台 UX**：创建/上传新版本按钮 busy 状态（上传中…/处理中…）、禁用防重复提交、finally 恢复；配额感知中文错误提示（TOO_MANY_FILES/HTML_TOO_LARGE/EXTRACT_LIMIT_EXCEEDED/ZIP_TOO_LARGE/UNSAFE_ENTRY_PATH 等 20+ 错误码映射，配额值来自 /api/limits）；无虚假进度条
+- **测试**：新增 `tests/quota.test.mjs`（2,786 条目默认配额拒绝 / 5,000 配额接收 / 3MiB HTML / 128MiB 严格生效 / 失败无残留 / 配额下安全规则仍生效 / /api/limits）与工作台 UX 静态断言；全量 **102/102 通过**
+- **真实样本端到端**：上传 201（4.9s）→ 2,737 文件 → 入口重定根 → 预览/大页/中文路径/字体/.crx 拒绝全部符合预期；真实 Chromium 渲染截图验收

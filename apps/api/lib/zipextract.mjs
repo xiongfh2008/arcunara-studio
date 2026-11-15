@@ -59,13 +59,37 @@ function closeZip(zipfile) {
   });
 }
 
-function nextEntry(zipfile) {
-  return new Promise((resolve, reject) => {
-    zipfile.once("entry", resolve);
-    zipfile.once("end", () => resolve(null));
-    zipfile.once("error", reject);
-    zipfile.readEntry();
+// Iterates entries with persistent end/error listeners — real exports can
+// contain thousands of entries and per-iteration once() listeners would
+// accumulate (MaxListenersExceeded / memory bloat).
+function createEntryIterator(zipfile) {
+  let pending = null;
+
+  zipfile.on("end", () => {
+    if (pending) {
+      const p = pending;
+      pending = null;
+      p.resolve(null);
+    }
   });
+
+  zipfile.on("error", (err) => {
+    if (pending) {
+      const p = pending;
+      pending = null;
+      p.reject(err);
+    }
+  });
+
+  return () =>
+    new Promise((resolve, reject) => {
+      pending = { resolve, reject };
+      zipfile.once("entry", (entry) => {
+        pending = null;
+        resolve(entry);
+      });
+      zipfile.readEntry();
+    });
 }
 
 function openStream(zipfile, entry) {
@@ -103,9 +127,10 @@ export async function extractZipSafely(zipPath, destDir, limits) {
   }
 
   try {
+    const nextEntry = createEntryIterator(zipfile);
     let entry;
 
-    while ((entry = await nextEntry(zipfile)) !== null) {
+    while ((entry = await nextEntry()) !== null) {
       await processEntry(entry);
     }
   } catch (err) {

@@ -30,6 +30,11 @@
 | 预览端口 | `127.0.0.1:28089` | `127.0.0.1:18089` |
 | 数据目录 | `<仓库根>/infra/docker/data/` | 其部署目录内 `data/` |
 | Token | `<仓库根>/infra/docker/secrets/api_token` | 其部署目录内 `secrets/api_token` |
+| 上传配额 | 测试环境放宽：files 5000 / HTML 8 MiB / 解压 128 MiB（ZIP 与单文件仍 20 MiB） | 不适用 |
+
+> 配额仅通过 compose 的 `ARCU_MAX_FILES` / `ARCU_MAX_HTML_BYTES` / `ARCU_MAX_EXTRACT_BYTES` 环境变量放宽，
+> 专为内部测试环境加载真实 Axure RP11 导出（2,786 条目 / 72.6 MiB）而设；**生产默认配额不变**（2000 / 2 MiB / 80 MiB），
+> 公网部署不得照抄测试值。
 
 运行前执行 `npm run preflight`（CI 亦运行）自动校验：项目名不冲突、宿主端口不相交、
 数据/Token 卷为栈内相对路径、无 host 网络、预览链接配置存在。
