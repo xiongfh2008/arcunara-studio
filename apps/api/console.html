@@ -5,168 +5,152 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arcunara Studio · 内部工作台</title>
 <style>
-  :root {
-    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2a2f3a;
-    --text: #e6e9ef; --muted: #8b93a3; --accent: #5b8cff; --accent2: #7c5bff;
-    --ok: #3fb97f; --err: #e5484d; --warn: #d9a13b; --radius: 10px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
-  }
-  header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 24px; border-bottom: 1px solid var(--border);
-    background: var(--panel);
-  }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  header .badge {
-    font-size: 11px; padding: 2px 8px; border-radius: 999px;
-    background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
-  }
-  header .spacer { flex: 1; }
-  .tokenbar {
-    display: flex; gap: 8px; align-items: center;
-    padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--panel2);
-  }
-  .tokenbar input[type="password"] {
-    flex: 0 1 420px; background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
-    font-family: inherit;
-  }
-  button {
-    background: var(--accent); border: none; color: #fff; padding: 8px 14px;
-    border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px;
-  }
-  button:hover { filter: brightness(1.1); }
-  button:disabled { opacity: .5; cursor: default; }
-  button.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
-  button.danger { background: var(--err); }
-  button.warn { background: var(--warn); color: #1a1a1a; }
-  main {
-    display: grid; grid-template-columns: 420px 1fr; gap: 16px;
-    padding: 16px 24px; align-items: start;
-  }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .card {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px;
-  }
-  .card h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  ul.projects { list-style: none; margin: 0; padding: 0; }
-  ul.projects li {
-    padding: 10px; border: 1px solid var(--border); border-radius: 8px;
-    margin-bottom: 8px; cursor: pointer;
-  }
-  ul.projects li:hover { border-color: var(--accent); }
-  ul.projects li.active { border-color: var(--accent); background: var(--panel2); }
-  ul.projects .toprow { display: flex; gap: 8px; align-items: baseline; }
-  ul.projects .name { font-weight: 600; word-break: break-all; }
-  ul.projects .meta { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
-  ul.projects .sub { color: var(--muted); font-size: 12px; margin-top: 4px; word-break: break-all; }
-  label.field { display: block; margin-bottom: 10px; }
-  label.field span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-  label.field input[type="text"], label.field textarea, label.field input[type="file"],
-  label.field select {
-    width: 100%; background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
-    font-family: inherit;
-  }
-  label.field textarea { min-height: 84px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 12px; margin-bottom: 12px; }
-  .kv dt { color: var(--muted); }
-  .kv dd { margin: 0; word-break: break-all; }
-  .link { color: var(--accent); cursor: pointer; text-decoration: none; word-break: break-all; }
-  table.versions, table.shares { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.versions th, table.versions td, table.shares th, table.shares td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  table.versions th, table.shares th { color: var(--muted); font-weight: 600; }
-  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); display: inline-block; }
-  .tag.current { color: var(--ok); border-color: var(--ok); }
-  .tag.active { color: var(--ok); border-color: var(--ok); }
-  .tag.expired { color: var(--warn); border-color: var(--warn); }
-  .tag.revoked, .tag.disabled { color: var(--err); border-color: var(--err); }
-  #feedback:empty { display: none; }
-  #feedback { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; white-space: pre-wrap; }
-  #feedback.ok { background: rgba(63,185,127,.12); border: 1px solid var(--ok); }
-  #feedback.err { background: rgba(229,72,77,.12); border: 1px solid var(--err); }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
-  .hidden { display: none; }
-  .section { margin-top: 20px; }
-  input.search { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: inherit; margin-bottom: 10px; }
-  .statline { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-
-  /* RC7 workspace refresh: prioritize project management and actions. */
-  :root { --surface-raised:#202631; --focus:#87a9ff; }
-  body { min-width:320px; }
-  header { position:sticky; top:0; z-index:10; min-height:70px; box-shadow:0 1px 12px rgba(0,0,0,.1); }
-  header h1 { font-size:18px; letter-spacing:-.02em; }
-  header .brand { display:flex; align-items:center; gap:12px; min-width:0; }
-  header .brand-mark { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:linear-gradient(135deg,#5b8cff,#8a70fa); font-weight:800; color:white; }
-  header .brand-sub { margin:1px 0 0; color:var(--muted); font-size:11px; }
-  .tokenbar { gap:12px; }
-  .tokenbar.collapsed { display:none; }
-  main { grid-template-columns:280px minmax(0,1fr); max-width:1600px; margin:0 auto; padding:24px; gap:20px; }
-  .workspace-sidebar { min-width:0; position:sticky; top:94px; align-self:start; }
-  .sidebar-title { display:flex; justify-content:space-between; align-items:baseline; margin:0 0 12px; font-weight:700; font-size:16px; }
-  .sidebar-title small { color:var(--muted); font-size:12px; font-weight:400; }
-  .sidebar-tools { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-  .sidebar-tools button:first-child { flex:1; font-weight:600; }
-  .sidebar-tools button:last-child { padding:8px 10px; }
-  .project-list-card { padding:16px; }
-  .project-list-card .search { margin-bottom:12px; }
-  .project-list-card .list-scroll { max-height:calc(100vh - 300px); min-height:140px; overflow:auto; }
-  ul.projects li { padding:12px; background:var(--bg); margin-bottom:7px; transition:border-color .15s,background .15s; }
-  ul.projects li.active { background:rgba(91,140,255,.12); box-shadow:inset 3px 0 0 var(--accent); }
-  ul.projects .toprow { align-items:center; flex-wrap:wrap; }
-  ul.projects .meta { margin-left:0; flex-basis:100%; }
-  .project-list-card .hint { line-height:1.6; }
-  #detailCard { padding:0; overflow:hidden; min-width:0; }
-  .detail-header { padding:24px 26px 18px; border-bottom:1px solid var(--border); }
-  .detail-heading { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; }
-  .detail-heading h2 { font-size:24px; letter-spacing:-.03em; margin:0 0 6px; color:var(--text); font-weight:700; text-transform:none; }
-  .detail-subtitle { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
-  .detail-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .detail-actions a { display:inline-flex; align-items:center; background:var(--accent); color:white; padding:9px 13px; border-radius:8px; text-decoration:none; font-weight:600; }
-  .detail-actions a:not([href]), .detail-actions a[href=""] { opacity:.5; pointer-events:none; }
-  .summary-grid { margin-top:20px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-  .metric { min-width:0; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
-  .metric span { font-size:12px; display:block; color:var(--muted); }
-  .metric strong { font-size:22px; line-height:1.7; font-weight:700; display:block; overflow-wrap:anywhere; }
-  .detail-tabs { display:flex; gap:6px; padding:12px 24px 0; overflow-x:auto; border-bottom:1px solid var(--border); }
-  .detail-tabs button { color:var(--muted); white-space:nowrap; padding:11px 16px; font-weight:600; background:transparent; border:0; border-radius:7px 7px 0 0; border-bottom:2px solid transparent; }
-  .detail-tabs button[aria-selected="true"] { color:var(--text); border-bottom-color:var(--accent); background:rgba(91,140,255,.09); }
-  .detail-panel { padding:24px 26px 30px; min-height:200px; }
-  .detail-panel[hidden] { display:none !important; }
-  .detail-panel h3 { margin:0 0 16px; font-size:16px; font-weight:650; }
-  .detail-panel .section { margin-top:26px; }
-  .detail-panel label.field { max-width:720px; }
-  .details-fold { border:1px solid var(--border); border-radius:10px; padding:12px 15px; margin:16px 0 0; }
-  .details-fold summary { font-size:13px; color:var(--muted); cursor:pointer; }
-  .details-fold[open] summary { margin-bottom:16px; }
-  .details-fold .kv { grid-template-columns:140px minmax(0,1fr); }
-  .table-scroll { overflow-x:auto; max-width:100%; }
-  .table-scroll table { min-width:720px; }
-  #shareTable, #deployKeyTable { width:100%; }
-  #feedback { position:fixed; bottom:24px; right:24px; z-index:30; max-width:min(520px,calc(100vw - 32px)); padding:12px 16px; border-radius:9px; box-shadow:0 12px 35px rgba(0,0,0,.3); }
-  #feedback.hidden { display:none; }
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
-  .create-dialog { width:min(560px,calc(100vw - 24px)); max-height:calc(100dvh - 40px); overflow:auto; background:var(--panel); color:var(--text); border:1px solid var(--border); padding:0; border-radius:14px; box-shadow:0 30px 100px rgba(0,0,0,.6); }
-  .create-dialog::backdrop { background:rgba(0,0,0,.72); }
-  .create-dialog-header { padding:22px 24px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
-  .create-dialog-header h2 { margin:0; font-size:18px; }
-  .create-dialog-content { padding:22px 24px 26px; }
-  .create-dialog-content .field input, .create-dialog-content .field textarea { background:var(--bg); color:var(--text); width:100%; border:1px solid var(--border); border-radius:8px; padding:10px; }
-  .create-dialog-content .field span { display:block; color:var(--muted); font-size:12px; margin:0 0 5px; }
-  .create-dialog-content .field { display:block; margin-bottom:15px; }
-  #createStatus:not(:empty) { margin:0 0 12px; color:var(--warn); font-size:12px; }
-  @media(max-width:1100px) { main { grid-template-columns:240px minmax(0,1fr); padding:18px; gap:12px; } .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-  @media(max-width:780px) { main { display:block; padding:12px; } .workspace-sidebar { position:static; margin-bottom:16px; } .project-list-card .list-scroll { max-height:250px; } .detail-header,.detail-panel { padding:18px; } .detail-tabs { padding:8px 12px 0; } .tokenbar { flex-wrap:wrap; padding:10px 14px; } header { padding:12px 14px; } header .brand-sub { display:none; } .summary-grid { gap:8px; } .metric strong { font-size:19px; } }
-  @media(max-width:430px) { .summary-grid { grid-template-columns:1fr 1fr; } .detail-actions { width:100%; } .detail-heading h2 { font-size:21px; } .detail-tabs button { padding:10px 12px; } }
+:root{--bg:#f6f8fc;--panel:#fff;--panel2:#f3f6fb;--border:#e7ecf4;--text:#17243a;--muted:#7b889d;--accent:#2563eb;--accent2:#1d4ed8;--ok:#119c66;--err:#d83c4a;--warn:#b7812d;--radius:15px;--focus:#7da9ff}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font:14px/1.55 "Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;color:var(--text);background:var(--bg)}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer;border:1px solid transparent;border-radius:9px;background:var(--accent);color:#fff;padding:9px 15px;font-weight:600;transition:background .14s,border-color .14s}
+button:hover{background:var(--accent2)}
+button:disabled{opacity:.48;cursor:not-allowed}
+button.ghost{background:#fff;color:#33415b;border-color:#dce4f0}
+button.ghost:hover{background:#f3f6fd;border-color:#bfcce4}
+button.danger{background:#fff;color:var(--err);border-color:#f5cbcf}
+button.danger:hover{background:#fff2f3}
+button.warn{background:#fff8ea;color:#a7741c;border-color:#f5dfb7}
+button.warn:hover{background:#fff0d5}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+button.icon-action{background:transparent;color:#61718a;padding:7px 9px;border:0;min-width:34px}
+button.icon-action:hover{background:#e9f0ff;color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.ui-icon{display:inline-block;width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle;flex-shrink:0}
+.shell-header{height:76px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:15}
+.brand{display:flex;align-items:center;gap:12px;font-size:21px;letter-spacing:-.55px;font-weight:750}
+.brand-mark{width:34px;height:38px;display:block}
+.connection-pill{display:flex;align-items:center;gap:10px;border:1px solid var(--border);background:#fff;color:#46536b;border-radius:28px;padding:6px 8px 6px 13px;font-size:12px}
+.connection-pill:hover{background:var(--panel2)}
+.avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#dceafa;color:#2563eb;font-weight:750;font-size:14px}
+#authBadge{font-size:12px;white-space:nowrap}
+.tokenbar{display:flex;align-items:center;gap:12px;padding:11px 24px 11px 270px;background:#edf4ff;border-bottom:1px solid #dce8fa}
+.tokenbar.collapsed{display:none}
+.tokenbar input{width:min(440px,100%);border:1px solid #d6e0ee;border-radius:8px;padding:9px 11px;background:#fff;color:var(--text)}
+.hint{font-size:12px;color:var(--muted);line-height:1.6}
+.app-layout{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - 76px)}
+.app-sidebar{background:linear-gradient(180deg,#fbfcff 0%,#f5f8fd 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:28px 14px 20px;min-width:0}
+.side-nav{display:flex;align-items:center;gap:14px;width:100%;border:0;background:transparent;color:#53637b;text-align:left;font-weight:600;padding:14px 17px;border-radius:11px;margin:0 0 4px}
+.side-nav:hover{background:#e9f0ff;color:#165ce5}
+.side-nav[aria-current="page"]{background:#e5edff;color:#1255d9}
+.sidebar-bottom{margin-top:auto;padding:18px 14px 10px;color:#91a0b4;font-size:12px;border-top:1px solid var(--border);line-height:1.8}
+.workspace{padding:28px 30px 40px;min-width:0;width:100%;max-width:1920px;margin:0 auto}
+.workspace-header{display:flex;align-items:start;justify-content:space-between;gap:20px;margin-bottom:24px}
+.workspace-header h1{margin:0;font-size:28px;letter-spacing:-.8px;font-weight:760}
+.workspace-header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.workspace-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.content-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(370px,1fr);gap:20px;align-items:start}
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 6px 25px rgba(35,57,93,.035);min-width:0}
+.project-list-card{padding:0;overflow:hidden}
+.list-toolbar{padding:20px 21px;display:flex;align-items:center;gap:16px;justify-content:space-between;border-bottom:1px solid #eff2f8}
+.list-toolbar h2{font-size:17px;margin:0;white-space:nowrap}
+.list-toolbar .count{font-size:12px;color:var(--muted);font-weight:400}
+.list-tools{display:flex;align-items:center;gap:9px;min-width:0}
+input.search{width:min(290px,100%);border:1px solid #dde5f2;border-radius:10px;background:#fbfcff;padding:9px 12px;color:var(--text);margin:0}
+.project-table-head{display:grid;grid-template-columns:minmax(190px,1fr) 54px 130px 70px 40px;gap:10px;align-items:center;padding:13px 21px;background:#f9fbff;color:#7a879e;font-size:12px;border-bottom:1px solid #f0f3f8}
+ul.projects{list-style:none;padding:0;margin:0}
+ul.projects li.project-row{display:grid;grid-template-columns:minmax(190px,1fr) 54px 130px 70px 40px;gap:10px;align-items:center;padding:13px 21px;border-bottom:1px solid #eff2f7;min-height:65px;cursor:pointer;transition:background .12s}
+ul.projects li.project-row:hover{background:#f7faff}
+ul.projects li.project-row.active{background:#ecf3ff}
+ul.projects li.project-row:last-child{border-bottom:0}
+.project-cell-name{display:flex;align-items:center;gap:10px;min-width:0}
+.project-cell-name .ui-icon{color:#447ce0}
+.project-name-button{background:transparent;border:0;border-radius:5px;color:#253551;font-weight:600;padding:5px 1px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.project-name-button:hover{background:transparent;color:var(--accent)}
+.project-date,.project-version{font-size:12px;color:#65758b;white-space:nowrap}
+.project-version{font-weight:700;color:#43516c}
+.status-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;font-size:11px;border-radius:999px;color:#159561;background:#e7f8ed;font-weight:600;white-space:nowrap}
+.status-chip:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.status-chip.off{color:#8f9aaa;background:#eef1f5}
+.empty-projects{padding:60px 15px;text-align:center;color:var(--muted)}
+.project-list-foot{border-top:1px solid var(--border);padding:12px 20px;font-size:12px;color:var(--muted)}
+.detail-card{padding:0;overflow:hidden}
+.detail-header{padding:25px 25px 20px}
+.detail-header h2{font-size:20px;line-height:1.38;margin:0 0 12px;font-weight:700;word-break:break-word}
+.detail-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#7e8ca1;font-size:12px}
+.detail-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:20px 0}
+.detail-actions a{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;padding:9px 14px;border-radius:9px;font-weight:600}
+.detail-actions a:hover{text-decoration:none;background:var(--accent2)}
+.detail-actions button{display:inline-flex;align-items:center;gap:7px}
+.detail-actions a:not([href]),.detail-actions a[href=""]{opacity:.5;pointer-events:none}
+.summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:#f8faff;border:1px solid #eff3fa;border-radius:12px;overflow:hidden}
+.metric{padding:15px 10px;text-align:center;min-width:0}
+.metric+.metric{border-left:1px solid var(--border)}
+.metric span{display:block;font-size:12px;color:var(--muted)}
+.metric strong{display:block;font-size:22px;color:#1c2a44;line-height:1.6;word-break:break-all}
+.detail-tabs{display:flex;gap:0;padding:0 16px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow-x:auto}
+.detail-tabs button{background:#fff;border:0;border-bottom:3px solid transparent;border-radius:0;padding:13px 10px;margin-right:4px;color:#74819a;font-size:12px;white-space:nowrap}
+.detail-tabs button:hover{background:#f6f8ff;color:#2563eb}
+.detail-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}
+.detail-panel{padding:20px 24px 24px;min-height:220px}
+.detail-panel[hidden]{display:none!important}
+.detail-panel h3{margin:0 0 14px;font-size:15px}
+.detail-panel .section{margin-top:24px}
+label.field{display:block;margin:0 0 14px}
+label.field span{display:block;margin-bottom:5px;color:#6e7b91;font-size:12px}
+label.field input,label.field textarea,label.field select{width:100%;padding:9px 11px;border:1px solid #dce4f0;border-radius:9px;background:#fff;color:var(--text)}
+label.field textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:112px minmax(0,1fr);gap:8px 12px;font-size:12px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;color:#40506b;overflow-wrap:anywhere}
+.details-fold{border:1px solid var(--border);border-radius:9px;padding:12px;margin-top:18px}
+.details-fold summary{font-size:12px;color:var(--muted);cursor:pointer}
+.details-fold[open] summary{margin-bottom:13px}
+.table-scroll{overflow-x:auto;max-width:100%}
+table.versions,table.shares{width:100%;border-collapse:collapse;font-size:12px}
+table.versions th,table.versions td,table.shares th,table.shares td{text-align:left;padding:10px 7px;border-bottom:1px solid #edf1f6}
+table.versions th,table.shares th{color:#8190a6;font-weight:500}
+.table-scroll table.shares{min-width:670px}
+table.versions th:nth-child(3),table.versions th:nth-child(4),table.versions th:nth-child(5),table.versions td:nth-child(3),table.versions td:nth-child(4),table.versions td:nth-child(5){display:none}
+table.versions td:nth-child(1){font-weight:700;color:#2d3c56}
+table.versions td:nth-child(2){color:#7d899c;font-size:11px}
+table.versions td:nth-child(7){text-align:right}
+.tag{display:inline-flex;align-items:center;border-radius:14px;padding:2px 7px;font-size:11px;color:#64748b;background:#f2f4f9}
+.tag.current,.tag.active{background:#e8f9ef;color:#13945e}
+.tag.expired{background:#fff3d7;color:#a87611}
+.tag.revoked,.tag.disabled{background:#fff0f1;color:#c33341}
+#feedback{position:fixed;right:20px;bottom:20px;z-index:60;max-width:min(520px,calc(100vw - 40px));border-radius:11px;padding:12px 16px;box-shadow:0 12px 35px #293b5f20;white-space:pre-wrap}
+#feedback.ok{background:#e8fbf0;color:#076743;border:1px solid #b4e6cc}
+#feedback.err{background:#fff1f0;color:#ab2d2a;border:1px solid #f4c6c4}
+#feedback:empty,#feedback.hidden{display:none}
+.statline{font-size:12px;color:var(--muted);margin:10px 0}
+.hidden{display:none!important}
+.link{color:var(--accent);word-break:break-all}
+.create-dialog{width:min(570px,calc(100vw - 28px));max-height:calc(100dvh - 32px);overflow:auto;padding:0;background:#fff;color:var(--text);border:1px solid #e3eaf5;border-radius:17px;box-shadow:0 30px 90px #14213b35}
+.create-dialog::backdrop{background:rgba(24,33,52,.4);backdrop-filter:blur(3px)}
+.create-dialog-header{display:flex;align-items:center;justify-content:space-between;padding:21px 24px;border-bottom:1px solid var(--border)}
+.create-dialog-header h2{font-size:19px;margin:0}
+.create-dialog-content{padding:22px 24px 26px}
+.create-dialog-content .field input,.create-dialog-content .field textarea{width:100%;background:#fff;color:var(--text);border:1px solid #dce4f0;border-radius:9px;padding:10px 11px}
+#createStatus:not(:empty){padding:8px 0;color:var(--err);font-size:12px}
+#cliHint{color:#31466b}
+@media(max-width:1280px){.app-layout{grid-template-columns:210px minmax(0,1fr)}.workspace{padding:22px}.content-grid{grid-template-columns:minmax(0,1.3fr) minmax(330px,1fr);gap:14px}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(140px,1fr) 43px 105px 65px 32px;gap:7px;padding-left:14px;padding-right:14px}.detail-header{padding:20px}}
+@media(max-width:1050px){.content-grid{grid-template-columns:minmax(0,1fr)}.detail-card{max-width:none}.detail-tabs button{font-size:13px;padding:13px 18px}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(180px,1fr) 62px 150px 85px 38px}}
+@media(max-width:680px){.shell-header{height:66px;padding:0 16px}.brand{font-size:17px}.app-layout{display:block}.app-sidebar{padding:9px;flex-direction:row;gap:4px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}.side-nav{flex:0 0 auto;margin:0;padding:9px 12px;font-size:12px;gap:7px}.side-nav .ui-icon{width:16px;height:16px}.sidebar-bottom{display:none}.workspace{padding:16px}.workspace-header{flex-wrap:wrap;gap:10px;margin-bottom:15px}.workspace-header h1{font-size:22px}.workspace-actions{width:100%}.workspace-actions button{flex:1}.list-toolbar{padding:14px;flex-wrap:wrap}.list-tools{width:100%}.list-tools input{flex:1}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(130px,1fr) 42px 74px 30px;gap:6px;padding:10px}.project-table-head span:nth-child(3),ul.projects li.project-row .project-date{display:none}.project-table-head span:nth-child(4){display:block}.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.detail-header{padding:18px}.detail-panel{padding:16px}.tokenbar{padding:12px;flex-wrap:wrap}.detail-actions{gap:6px}}
 </style>
 </head>
 <body>
+<svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
+  <symbol id="ui-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3z"/></symbol>
+  <symbol id="ui-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M9 11l6-5M9 13l6 5"/></symbol>
+  <symbol id="ui-rocket" viewBox="0 0 24 24"><path d="M5 14l-2 6 6-2 9-9a9 9 0 0 0 2-6 9 9 0 0 0-6 2z"/><circle cx="14" cy="10" r="2"/><path d="M9 18l-3-3m3 0l-3-3"/></symbol>
+  <symbol id="ui-chart" viewBox="0 0 24 24"><path d="M4 20V12M10 20V5M16 20v-8M22 20v-13"/></symbol>
+  <symbol id="ui-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M10 2h4l.7 2.8 2.4 1.1 2.7-1.1 2 3.4-2 2.1v2.9l2 2.1-2 3.4-2.7-1.1-2.4 1.1L14 22h-4l-.7-2.8-2.4-1.1-2.7 1.1-2-3.4 2-2.1v-2.9l-2-2.1 2-3.4 2.7 1.1 2.4-1.1z"/></symbol>
+  <symbol id="ui-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ui-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5l5-5 5 5"/><path d="M4 15v5h16v-5"/></symbol>
+  <symbol id="ui-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2m3 6a5 5 0 0 0-7 0l-3 3a5 5 0 1 0 7 7l2-2"/></symbol>
+  <symbol id="ui-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></symbol>
+  <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+  <symbol id="ui-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></symbol>
+</svg>
 <script>
   // Injected by the server at serve time (unique placeholder tokens).
   // __PREVIEW_BASE__ is an absolute browser-facing URL when configured
@@ -174,12 +158,12 @@
   window.__PREVIEW_PORT__ = __ARCU_PREVIEW_PORT__;
   window.__PREVIEW_BASE__ = __ARCU_PREVIEW_BASE__;
 </script>
-<header>
-  <div class="brand"><span class="brand-mark" aria-hidden="true">A</span><div><h1>Arcunara Studio</h1><p class="brand-sub">原型托管 · 分享 · 自动部署</p></div></div>
-  <span class="badge">内部工作台</span>
-  <span class="spacer"></span>
-  <button type="button" class="ghost" id="connectionToggle" aria-controls="tokenbar" aria-expanded="true">连接设置</button>
-  <span class="badge" id="authBadge">未授权</span>
+<header class="shell-header">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 34 38" aria-hidden="true"><path d="M5 29 15 8c1.3-3 3.5-3 5 0l10 21c1.2 2.7-1.7 5.2-4.2 3.4l-8.1-6.7-8.1 6.7C7.1 34.3 3.8 31.7 5 29z" fill="#2563eb"/><path d="M16.8 11 9 28l8.2-5.8 6.7 5.6z" fill="#82bcff"/></svg>
+    <span>Arcunara Studio</span>
+  </div>
+  <button type="button" id="connectionToggle" class="connection-pill" aria-controls="tokenbar" aria-expanded="true" title="设置 API 连接"><span id="authBadge">未连接</span><span class="avatar">A</span></button>
 </header>
 
 <div class="tokenbar" id="tokenbar">
@@ -190,70 +174,68 @@
 
 <div id="feedback" class="hidden" role="status" aria-live="polite"></div>
 
-<main>
-  <aside class="workspace-sidebar" aria-label="项目列表">
-    <div class="sidebar-title"><span>我的项目</span><small id="projectCount">0 个项目</small></div>
-    <div class="card project-list-card">
-      <div class="sidebar-tools">
-        <button type="button" id="openCreateDialog">＋ 新建项目</button>
-        <button type="button" id="refreshBtn" class="ghost">刷新</button>
-      </div>
-      <label class="hint" for="projectSearch">搜索项目</label>
-      <input type="search" id="projectSearch" class="search" placeholder="搜索名称或项目 ID" autocomplete="off">
-      <div class="list-scroll"><ul class="projects" id="projectList"></ul></div>
-    </div>
-  </aside>
-  <section id="detailCard" class="card hidden" aria-label="项目工作区">
-    <div class="detail-header">
-      <div class="detail-heading">
-        <div><h2 id="projectHeading">项目概览</h2><p class="detail-subtitle" id="projectIdentifier"></p></div>
-        <div class="detail-actions">
-          <a id="previewLink" class="link" target="_blank" rel="noopener noreferrer"></a>
-          <button type="button" id="copyLink" class="ghost">复制链接</button>
-        </div>
-      </div>
-      <div class="summary-grid">
-        <div class="metric"><span>当前版本</span><strong id="summaryVersion">—</strong></div>
-        <div class="metric"><span>文件数量</span><strong id="summaryFiles">—</strong></div>
-        <div class="metric"><span>文件大小</span><strong id="summarySize">—</strong></div>
-        <div class="metric"><span>预览状态</span><strong id="summaryState">—</strong></div>
-      </div>
-    </div>
-    <nav class="detail-tabs" role="tablist" aria-label="项目功能">
-      <button type="button" role="tab" data-tab="overview" aria-selected="true">概览与设置</button>
-      <button type="button" role="tab" data-tab="versions" aria-selected="false">版本管理</button>
-      <button type="button" role="tab" data-tab="shares" aria-selected="false">分享管理</button>
-      <button type="button" role="tab" data-tab="deploy" aria-selected="false">自动部署</button>
+<div class="app-layout">
+  <aside class="app-sidebar" aria-label="功能管理">
+    <nav aria-label="主要功能">
+      <button class="side-nav" type="button" data-module="projects" aria-current="page"><svg class="ui-icon"><use href="#ui-folder"/></svg>项目管理</button>
+      <button class="side-nav" type="button" data-module="shares"><svg class="ui-icon"><use href="#ui-share"/></svg>分享管理</button>
+      <button class="side-nav" type="button" data-module="deploy"><svg class="ui-icon"><use href="#ui-rocket"/></svg>自动部署</button>
+      <button class="side-nav" type="button" data-module="stats"><svg class="ui-icon"><use href="#ui-chart"/></svg>访问统计</button>
+      <button class="side-nav" type="button" data-module="settings"><svg class="ui-icon"><use href="#ui-settings"/></svg>设置</button>
     </nav>
-    <div class="detail-panel" data-panel="overview" role="tabpanel">
-    <h3>基本信息</h3>
-    <label class="field"><span>项目名称</span>
-      <input type="text" id="editName" maxlength="100">
-    </label>
-    <label class="field"><span>描述（留空即清除）</span>
-      <input type="text" id="editDesc" maxlength="1000">
-    </label>
-    <div class="row" style="margin-bottom:8px">
-      <button id="saveInfoBtn">保存修改</button>
-      <button id="togglePreviewBtn" class="warn">停用预览</button>
+    <div class="sidebar-bottom">原型托管 · 版本管理 · 安全分享</div>
+  </aside>
+  <main class="workspace">
+    <div class="workspace-header">
+      <div><h1 id="viewTitle">项目管理</h1><p id="viewSubtitle">上传、管理和分享你的原型项目</p></div>
+      <div class="workspace-actions">
+        <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
+        <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
+      </div>
     </div>
-    <p class="hint">停用预览后，旧预览地址 /p/{id}/ 的页面与全部静态资源都会被服务端拒绝（404）；已创建的分享链接不受影响，可在分享管理中单独撤销或停用。</p>
-
-
-      <details class="details-fold">
-        <summary>查看项目详细信息（UUID、入口文件、创建时间等）</summary>
-        <dl class="kv" id="detailMeta"></dl>
-      </details>
-    </div>
-    <div class="detail-panel" data-panel="versions" role="tabpanel" hidden>
-    <h3>版本发布与回滚</h3>
+    <div class="content-grid">
+      <section class="card project-list-card" aria-label="项目列表">
+        <div class="list-toolbar">
+          <h2>我的项目 <span class="count" id="projectCount">0 个项目</span></h2>
+          <div class="list-tools">
+            <input type="search" id="projectSearch" class="search" placeholder="搜索项目名称 / ID" aria-label="搜索项目名称或 ID" autocomplete="off">
+            <button id="refreshBtn" class="icon-action" title="刷新项目列表" aria-label="刷新项目列表">↻</button>
+          </div>
+        </div>
+        <div class="project-table-head"><span>项目名称</span><span>版本</span><span>更新时间</span><span>状态</span><span>操作</span></div>
+        <ul class="projects" id="projectList"></ul>
+        <div class="project-list-foot">选择项目可查看版本、分享及自动部署设置。</div>
+      </section>
+      <section id="detailCard" class="card detail-card hidden" aria-label="当前项目详情">
+        <div class="detail-header">
+          <h2 id="projectHeading">选择项目</h2>
+          <div class="detail-status">
+            <span class="status-chip" id="summaryState">—</span>
+            <span id="projectIdentifier"></span>
+          </div>
+          <div class="detail-actions">
+            <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
+            <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 更新版本</button>
+            <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
+            <button type="button" id="copyLink" class="ghost" title="复制原型预览链接">复制链接</button>
+          </div>
+          <div class="summary-grid">
+            <div class="metric"><span>当前版本</span><strong id="summaryVersion">—</strong></div>
+            <div class="metric"><span>文件数量</span><strong id="summaryFiles">—</strong></div>
+            <div class="metric"><span>项目大小</span><strong id="summarySize">—</strong></div>
+          </div>
+        </div>
+        <nav class="detail-tabs" role="tablist" aria-label="当前项目管理">
+          <button type="button" role="tab" data-tab="versions" aria-selected="true">版本记录</button>
+          <button type="button" role="tab" data-tab="shares" aria-selected="false">分享链接</button>
+          <button type="button" role="tab" data-tab="deploy" aria-selected="false">自动部署</button>
+          <button type="button" role="tab" data-tab="overview" aria-selected="false">项目信息</button>
+        </nav>
+        <div class="detail-panel" data-panel="versions" role="tabpanel">    <h3>历史版本</h3>
     <p class="hint">上传新的 HTML/ZIP 后，原有预览地址保持不变。</p>
-    <div class="row" style="margin-bottom:16px">
-      <input type="file" id="versionFile" accept=".html,.htm,.zip" style="color:var(--text)">
-      <button id="uploadVersionBtn">上传为新版本</button>
-    </div>
+    <p class="hint">选择历史版本后可以回滚；更新版本请使用顶部“上传新版本”。</p>
 
-    <h3 class="section">历史版本</h3>
+
     <div class="table-scroll"><table class="versions" id="versionTable">
       <thead><tr><th>版本</th><th>时间</th><th>文件数</th><th>大小</th><th>入口</th><th>状态</th><th></th></tr></thead>
       <tbody id="versionRows"></tbody>
@@ -264,9 +246,8 @@
     </div>
 
 
-    </div>
-    <div class="detail-panel" data-panel="shares" role="tabpanel" hidden>
-    <h3>分享管理</h3>
+</div>
+        <div class="detail-panel" data-panel="shares" role="tabpanel" hidden>    <h3>分享管理</h3>
     <div class="row" style="margin-bottom:10px">
       <label class="field" style="margin:0"><span>有效期</span>
         <select id="shareExpiry">
@@ -293,9 +274,8 @@
     <p id="noShares" class="hint">当前没有分享链接</p>
 
 
-    </div>
-    <div class="detail-panel" data-panel="deploy" role="tabpanel" hidden>
-    <h3>自动部署</h3>
+</div>
+        <div class="detail-panel" data-panel="deploy" role="tabpanel" hidden>    <h3>自动部署</h3>
     <p class="hint">为本地 CLI（arcunara deploy / watch）创建项目级部署密钥。密钥只能向本项目上传新版本和查询部署状态，不能管理分享、修改项目设置或回滚版本。完整密钥仅在创建时展示一次，服务端只保存哈希。</p>
     <div class="row" style="margin-bottom:10px">
       <label class="field" style="margin:0"><span>密钥有效期</span>
@@ -324,8 +304,44 @@
     </table></div>
 
     </div>
-  </section>
-</main>
+</div>
+        <div class="detail-panel" data-panel="overview" role="tabpanel" hidden>    <h3>基本信息</h3>
+    <label class="field"><span>项目名称</span>
+      <input type="text" id="editName" maxlength="100">
+    </label>
+    <label class="field"><span>描述（留空即清除）</span>
+      <input type="text" id="editDesc" maxlength="1000">
+    </label>
+    <div class="row" style="margin-bottom:8px">
+      <button id="saveInfoBtn">保存修改</button>
+      <button id="togglePreviewBtn" class="warn">停用预览</button>
+    </div>
+    <p class="hint">停用预览后，旧预览地址 /p/{id}/ 的页面与全部静态资源都会被服务端拒绝（404）；已创建的分享链接不受影响，可在分享管理中单独撤销或停用。</p>
+
+
+      <details class="details-fold">
+        <summary>查看项目详细信息（UUID、入口文件、创建时间等）</summary>
+        <dl class="kv" id="detailMeta"></dl>
+      </details>
+</div>
+      </section>
+    </div>
+  </main>
+</div>
+<dialog class="create-dialog" id="versionUploadDialog" aria-labelledby="versionUploadHeading">
+  <div class="create-dialog-header">
+    <h2 id="versionUploadHeading">上传新版本</h2>
+    <button type="button" id="closeUploadDialog" class="ghost" aria-label="关闭版本上传弹窗">关闭</button>
+  </div>
+  <div class="create-dialog-content">
+    <p class="hint" id="uploadProjectName">请选择需要更新的项目</p>
+    <p class="hint">支持 HTML、HTM、ZIP，文件大小以服务器实际配额为准。</p>
+        <div class="row" style="margin-bottom:16px">
+      <input type="file" id="versionFile" accept=".html,.htm,.zip" style="color:var(--text)">
+      <button id="uploadVersionBtn">上传为新版本</button>
+    </div>
+  </div>
+</dialog>
 <dialog class="create-dialog" id="newProjectDialog" aria-labelledby="createDialogHeading">
   <div class="create-dialog-header">
     <h2 id="createDialogHeading">创建新项目</h2>
@@ -369,7 +385,8 @@ let creating = false; // double-submit guards
 let uploadingVersion = false;
 let savingInfo = false;
 let creatingShare = false;
-let activeTab = "overview";
+let activeTab = "versions";
+let activeModule = "projects";
 let feedbackTimer = null;
 
 const FALLBACK_LIMITS = {
@@ -502,7 +519,7 @@ function setBusy(btn, busy, busyLabel) {
 }
 
 function setAuthorized(ok) {
-  $("authBadge").textContent = ok ? "已连接" : "未授权";
+  $("authBadge").textContent = ok ? "已连接" : "连接 API";
   $("authBadge").style.color = ok ? "var(--ok)" : "var(--muted)";
   $("tokenbar").classList.toggle("collapsed", ok);
   $("connectionToggle").setAttribute("aria-expanded", String(!ok));
@@ -513,6 +530,7 @@ async function loadProjects() {
   const data = await api("/api/projects");
   projects = data.projects;
   renderProjects();
+  if (!selected && projects.length) await selectProject(projects[0].id);
 }
 
 function projectMatches(p, query) {
@@ -522,6 +540,15 @@ function projectMatches(p, query) {
   return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
 }
 
+function makeIcon(symbol) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "ui-icon");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", "#ui-" + symbol);
+  svg.appendChild(use);
+  return svg;
+}
+
 function renderProjects() {
   const list = $("projectList");
   list.textContent = "";
@@ -529,48 +556,61 @@ function renderProjects() {
   const visible = projects.filter((p) => projectMatches(p, query));
   $("projectCount").textContent = visible.length + " 个项目";
 
-  if (visible.length === 0) {
-    const li = document.createElement("li");
-    li.textContent = query ? "没有匹配的项目" : "暂无项目";
-    li.style.color = "var(--muted)";
-    list.appendChild(li);
+  if (!visible.length) {
+    const empty = document.createElement("li");
+    empty.className = "empty-projects";
+    empty.textContent = query ? "没有找到匹配的项目" : "暂无项目，点击“新建项目”开始";
+    list.appendChild(empty);
     return;
   }
 
   for (const p of visible) {
     const li = document.createElement("li");
-    if (selected && selected.id === p.id) li.className = "active";
+    li.className = "project-row" + (selected?.id === p.id ? " active" : "");
 
-    const top = document.createElement("div");
-    top.className = "toprow";
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = p.name;
-    const meta = document.createElement("span");
-    meta.className = "meta";
-    meta.textContent = `v${p.currentVersion} · ${p.fileCount} 文件 · ${fmtBytes(p.totalSize)}`;
-    top.append(name, meta);
+    const nameCell = document.createElement("div");
+    nameCell.className = "project-cell-name";
+    nameCell.appendChild(makeIcon("folder"));
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "project-name-button";
+    open.textContent = p.name;
+    open.title = p.name;
+    open.addEventListener("click", () => selectProject(p.id));
+    nameCell.appendChild(open);
 
-    const sub = document.createElement("div");
-    sub.className = "sub";
-    const type = p.isAxure === true ? "Axure 原型" : p.isAxure === false ? "HTML 原型" : "原型";
-    const state = p.previewEnabled === false ? "预览已停用" : "预览启用中";
-    sub.textContent = `${type} · ${state} · 更新于 ${fmtTime(p.updatedAt)}`;
+    const versionCell = document.createElement("span");
+    versionCell.className = "project-version";
+    versionCell.textContent = "v" + p.currentVersion;
 
-    li.append(top, sub);
-    li.tabIndex = 0;
-    li.setAttribute("role", "button");
-    li.setAttribute("aria-label", "打开项目 " + p.name);
-    li.addEventListener("click", () => selectProject(p.id));
-    li.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault(); selectProject(p.id);
-      }
+    const dateCell = document.createElement("span");
+    dateCell.className = "project-date";
+    dateCell.textContent = fmtTime(p.updatedAt);
+
+    const statusCell = document.createElement("span");
+    statusCell.className = "status-chip" + (p.previewEnabled === false ? " off" : "");
+    statusCell.textContent = p.previewEnabled === false ? "停用" : "启用";
+
+    const actions = document.createElement("button");
+    actions.type = "button";
+    actions.className = "icon-action";
+    actions.textContent = "•••";
+    actions.title = "查看项目设置";
+    actions.setAttribute("aria-label", "管理项目 " + p.name);
+    actions.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await selectProject(p.id);
+      activateModule("settings");
+    });
+
+    li.append(nameCell, versionCell, dateCell, statusCell, actions);
+    li.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      selectProject(p.id);
     });
     list.appendChild(li);
   }
 }
-
 async function selectProject(id) {
   try {
     selected = await api(`/api/projects/${id}`);
@@ -596,12 +636,12 @@ function kv(label, value) {
 function renderDetail() {
   $("detailCard").classList.remove("hidden");
   $("projectHeading").textContent = selected.name;
-  $("projectIdentifier").textContent = selected.id + " · " + (selected.isAxure ? "Axure 原型" : "HTML / ZIP 原型") + " · 最近更新 " + fmtTime(selected.updatedAt);
+  $("projectIdentifier").textContent = (selected.isAxure ? "Axure 原型" : "HTML / ZIP 原型") + " · 更新于 " + fmtTime(selected.updatedAt);
   $("summaryVersion").textContent = "v" + selected.currentVersion;
   $("summaryFiles").textContent = String(selected.fileCount);
   $("summarySize").textContent = fmtBytes(selected.totalSize);
-  $("summaryState").textContent = selected.previewEnabled === false ? "已停用" : "正常";
-  $("summaryState").style.color = selected.previewEnabled === false ? "var(--warn)" : "var(--ok)";
+  $("summaryState").textContent = selected.previewEnabled === false ? "已停用" : "已启用";
+  $("summaryState").className = "status-chip" + (selected.previewEnabled === false ? " off" : "");
   activateTab(activeTab);
   const meta = $("detailMeta");
   meta.textContent = "";
@@ -625,7 +665,7 @@ function renderDetail() {
   toggle.textContent = selected.previewEnabled === false ? "启用预览" : "停用预览";
 
   const link = $("previewLink");
-  link.textContent = selected.previewEnabled === false ? "预览已停用" : "打开预览";
+  link.lastChild.textContent = selected.previewEnabled === false ? " 预览已停用" : " 预览";
   link.href = selected.previewEnabled === false ? "" : previewUrlFor(selected.id);
 
   const rows = $("versionRows");
@@ -944,7 +984,7 @@ $("copyNewDeployKey").addEventListener("click", async () => {
 
 function activateTab(tab) {
   const supported = ["overview", "versions", "shares", "deploy"];
-  activeTab = supported.includes(tab) ? tab : "overview";
+  activeTab = supported.includes(tab) ? tab : "versions";
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const isActive = button.dataset.tab === activeTab;
     button.setAttribute("aria-selected", String(isActive));
@@ -954,8 +994,37 @@ function activateTab(tab) {
     panel.hidden = panel.dataset.panel !== activeTab;
   });
 }
+
+function activateModule(module) {
+  const screens = {
+    projects: ["项目管理", "上传、管理和分享你的原型项目", "versions"],
+    shares: ["分享管理", "管理当前项目的分享链接和有效期", "shares"],
+    deploy: ["自动部署", "为当前项目配置 CLI 部署密钥和自动同步", "deploy"],
+    stats: ["访问统计", "查看当前项目分享链接的访问次数和状态", "shares"],
+    settings: ["项目设置", "编辑当前项目的信息及预览权限", "overview"]
+  };
+  activeModule = screens[module] ? module : "projects";
+  const [title, description, tab] = screens[activeModule];
+  $("viewTitle").textContent = title;
+  $("viewSubtitle").textContent = description;
+  document.querySelectorAll("[data-module]").forEach((button) => {
+    if (button.dataset.module === activeModule) {
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.removeAttribute("aria-current");
+    }
+  });
+  activateTab(tab);
+}
+
+document.querySelectorAll("[data-module]").forEach((button) => {
+  button.addEventListener("click", () => activateModule(button.dataset.module));
+});
 document.querySelectorAll("[data-tab]").forEach((button) => {
-  button.addEventListener("click", () => activateTab(button.dataset.tab));
+  button.addEventListener("click", () => {
+    const module = {versions:"projects", shares:"shares", deploy:"deploy", overview:"settings"}[button.dataset.tab];
+    activateModule(module);
+  });
 });
 $("connectionToggle").addEventListener("click", () => {
   const hidden = $("tokenbar").classList.toggle("collapsed");
@@ -968,6 +1037,15 @@ $("openCreateDialog").addEventListener("click", () => {
   $("newName").focus();
 });
 $("closeCreateDialog").addEventListener("click", () => $("newProjectDialog").close());
+function openVersionDialog() {
+  if (!selected) { feedback("请先选择项目", false); return; }
+  $("uploadProjectName").textContent = "当前项目：" + selected.name;
+  $("versionUploadDialog").showModal();
+}
+$("openUploadDialog").addEventListener("click", openVersionDialog);
+$("openUploadDialogDetail").addEventListener("click", openVersionDialog);
+$("closeUploadDialog").addEventListener("click", () => $("versionUploadDialog").close());
+$("goShareDetail").addEventListener("click", () => activateModule("shares"));
 
 $("saveToken").addEventListener("click", async () => {
   token = $("tokenInput").value.trim();
@@ -1117,6 +1195,7 @@ $("uploadVersionBtn").addEventListener("click", async () => {
     const v = await api(`/api/projects/${selected.id}/versions`, { method: "POST", body: fd });
     feedback(`已发布 v${v.version}，分享链接继续指向当前版本`, true);
     $("versionFile").value = "";
+    $("versionUploadDialog").close();
     await selectProject(selected.id);
     await loadProjects();
   } catch (err) {
