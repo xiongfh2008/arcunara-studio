@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 #
 # Arcunara Studio — one-shot VPS deploy for the ISOLATED v0.3.0 test stack.
 #
@@ -60,7 +60,9 @@ echo "directory, compose file, data and token all present"
 step "Git repository state"
 cd "$TARGET_DIR" || fail "cannot cd into $TARGET_DIR"
 BEFORE_GIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
-git fetch origin main || fail "git fetch failed"
+git fetch origin "+refs/heads/main:refs/remotes/origin/main" --tags \
+  || git fetch origin "+refs/heads/main:refs/remotes/origin/main" \
+  || fail "git fetch failed"
 git cat-file -e "$DEPLOY_SHA^{commit}" || fail "commit $DEPLOY_SHA not found after fetch"
 git merge-base --is-ancestor "$DEPLOY_SHA" origin/main || fail "commit $DEPLOY_SHA is not on origin/main"
 echo "VPS repo HEAD before: $BEFORE_GIT"
