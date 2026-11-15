@@ -1178,36 +1178,28 @@ function activateTab(tab) {
   });
 }
 
-function activateModule(module) {
-  const screens = {
-    projects: ["项目管理", "上传、管理和分享你的原型项目", "versions"],
-    shares: ["分享管理", "管理当前项目的分享链接和有效期", "shares"],
-    deploy: ["自动部署", "为当前项目配置 CLI 部署密钥和自动同步", "deploy"],
-    stats: ["访问统计", "查看当前项目分享链接的访问次数和状态", "shares"],
-    settings: ["项目设置", "编辑当前项目的信息及预览权限", "overview"]
-  };
-  activeModule = screens[module] ? module : "projects";
-  const [title, description, tab] = screens[activeModule];
-  $("viewTitle").textContent = title;
-  $("viewSubtitle").textContent = description;
-  document.querySelectorAll("[data-module]").forEach((button) => {
-    if (button.dataset.module === activeModule) {
-      button.setAttribute("aria-current", "page");
-    } else {
-      button.removeAttribute("aria-current");
-    }
-  });
+function openManagePanel(tab) {
+  if (!selected) { feedback("请先选择项目", false); return; }
   activateTab(tab);
+  const labels = {versions:"版本记录",shares:"分享管理",deploy:"自动部署",overview:"项目设置"};
+  $("manageDialogHeading").textContent = selected.name + " · " + (labels[activeTab] || "项目管理");
+  if (!$("manageDialog").open) $("manageDialog").showModal();
 }
 
-document.querySelectorAll("[data-module]").forEach((button) => {
-  button.addEventListener("click", () => activateModule(button.dataset.module));
-});
 document.querySelectorAll("[data-tab]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const module = {versions:"projects", shares:"shares", deploy:"deploy", overview:"settings"}[button.dataset.tab];
-    activateModule(module);
-  });
+  button.addEventListener("click", () => openManagePanel(button.dataset.tab));
+});
+$("closeManageDialog").addEventListener("click", () => $("manageDialog").close());
+$("openSharesPanel").addEventListener("click", () => openManagePanel("shares"));
+$("openDeployPanel").addEventListener("click", () => openManagePanel("deploy"));
+$("openVersionsPanel").addEventListener("click", () => openManagePanel("versions"));
+$("openSettingsPanel").addEventListener("click", () => openManagePanel("overview"));
+$("goShareDetail").addEventListener("click", () => openManagePanel("shares"));
+$("previewQuickToggle").addEventListener("click", () => $("togglePreviewBtn").click());
+$("copyCliCommand").addEventListener("click", async () => {
+  const command = "arcunara deploy ./dist";
+  try { await navigator.clipboard.writeText(command); feedback("CLI 命令已复制", true); }
+  catch { window.prompt("复制 CLI 命令：", command); }
 });
 $("connectionToggle").addEventListener("click", () => {
   const hidden = $("tokenbar").classList.toggle("collapsed");
@@ -1220,15 +1212,56 @@ $("openCreateDialog").addEventListener("click", () => {
   $("newName").focus();
 });
 $("closeCreateDialog").addEventListener("click", () => $("newProjectDialog").close());
+
+function setVersionUploadMode(mode) {
+  versionUploadMode = mode === "html" ? "html" : "file";
+  document.querySelectorAll("[data-upload-mode]").forEach(btn => {
+    btn.setAttribute("aria-selected", String(btn.dataset.uploadMode === versionUploadMode));
+  });
+  $("versionFilePanel").classList.toggle("hidden", versionUploadMode !== "file");
+  $("versionHtmlPanel").classList.toggle("hidden", versionUploadMode !== "html");
+}
+document.querySelectorAll("[data-upload-mode]").forEach(btn => {
+  btn.addEventListener("click", () => setVersionUploadMode(btn.dataset.uploadMode));
+});
 function openVersionDialog() {
   if (!selected) { feedback("请先选择项目", false); return; }
-  $("uploadProjectName").textContent = "当前项目：" + selected.name;
+  $("uploadProjectName").textContent = "项目：" + selected.name;
   $("versionUploadDialog").showModal();
+  setVersionUploadMode("file");
 }
 $("openUploadDialog").addEventListener("click", openVersionDialog);
 $("openUploadDialogDetail").addEventListener("click", openVersionDialog);
 $("closeUploadDialog").addEventListener("click", () => $("versionUploadDialog").close());
-$("goShareDetail").addEventListener("click", () => activateModule("shares"));
+$("cancelVersionUpload").addEventListener("click", () => $("versionUploadDialog").close());
+$("versionFile").addEventListener("change", () => {
+  $("versionFileName").textContent = $("versionFile").files[0]?.name || "支持 HTML / HTM / ZIP 文件";
+});
+const uploadDrop = $("versionDropzone");
+for (const eventName of ["dragenter","dragover"]) {
+  uploadDrop.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    uploadDrop.classList.add("dragover");
+  });
+}
+for (const eventName of ["dragleave","drop"]) {
+  uploadDrop.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    uploadDrop.classList.remove("dragover");
+  });
+}
+uploadDrop.addEventListener("drop", (event) => {
+  const file = event.dataTransfer?.files?.[0];
+  if (!file) return;
+  if (!/\.(html?|zip)$/i.test(file.name)) {
+    feedback("仅支持 HTML、HTM 或 ZIP 文件", false);
+    return;
+  }
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  $("versionFile").files = dt.files;
+  $("versionFileName").textContent = file.name;
+});
 
 $("saveToken").addEventListener("click", async () => {
   token = $("tokenInput").value.trim();
