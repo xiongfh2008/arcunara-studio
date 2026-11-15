@@ -96,3 +96,10 @@
 - 预览 CSP 增加 `form-action 'self'`（阻止表单提交跳转外部站点）
 - 新增 `docs/KNOWN_LIMITATIONS.md`（上传限制、预览隔离边界、公网部署前置条件）
 - 更新 README、development.md（完整 API 规范）、deployment.md（Dockerfile 流程、v0.2.0 兼容与回滚）、.env.example
+
+## 最终交付状态 — ✅ 已推送 GitHub
+
+- `main` @ `8fc9a61`（v0.2.0 工程基线）已推送
+- `feature/hosting-mvp` @ `9163de8`（7 个提交）已推送
+- Draft PR：https://github.com/xiongfh2008/arcunara-studio/pull/1（**未合并**，等待人工评审）
+- 最终验证：82/82 测试通过、lint 21 文件通过、本地 Docker 构建与容器验收、真实 Chromium 浏览器端到端验证
