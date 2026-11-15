@@ -44,3 +44,22 @@ test("all in-page scripts compile as JavaScript", () => {
     assert.doesNotThrow(() => new Script(scripts[i][1], { filename: "console-script-" + i }), "inline script " + i);
   }
 });
+
+test("light workspace matches project-list and project-details design with functional modules", () => {
+  assert.match(html, /class="app-layout"/);
+  assert.match(html, /class="app-sidebar"/);
+  assert.match(html, /class="project-table-head"/);
+  assert.match(html, /class="content-grid"/);
+  assert.match(html, /--bg:#f6f8fc/);
+  for (const module of ["projects", "shares", "deploy", "stats", "settings"]) {
+    assert.match(html, new RegExp('data-module="' + module + '"'));
+  }
+  assert.match(html, /id="versionUploadDialog"/);
+  assert.match(html, /id="openUploadDialog"/);
+  assert.match(html, /id="openUploadDialogDetail"/);
+  assert.match(html, /id="goShareDetail"/);
+  assert.match(html, /function activateModule\(module\)/);
+  assert.match(html, /function openVersionDialog\(\)/);
+  // Do not re-introduce mocked top search or unused workspace switching.
+  assert.doesNotMatch(html, /产品设计工作区|搜索项目、版本或分享/);
+});
