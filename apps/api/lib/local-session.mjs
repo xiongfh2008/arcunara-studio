@@ -21,7 +21,7 @@ export function createLocalSession(config) {
 
     const host = req.headers.host;
     if (typeof host !== "string") return false;
-    const match = /^(127\\.0\\.0\\.1|localhost):(\\d{1,5})$/.exec(host);
+    const match = /^(127[.]0[.]0[.]1|localhost):([0-9]{1,5})$/.exec(host);
     if (!match || Number(match[2]) !== socket.localPort) return false;
 
     return true;
