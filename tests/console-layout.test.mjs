@@ -38,7 +38,7 @@ test("workspace keeps all existing RC2-RC6 control IDs exactly once", () => {
 });
 
 test("all in-page scripts compile as JavaScript", () => {
-  const scripts = [...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)];
+  const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
   assert.ok(scripts.length >= 2, "platform wiring and controller scripts exist");
   for (let i = 0; i < scripts.length; i++) {
     assert.doesNotThrow(() => new Script(scripts[i][1], { filename: "console-script-" + i }), "inline script " + i);
