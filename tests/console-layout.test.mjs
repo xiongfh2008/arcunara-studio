@@ -11,7 +11,9 @@ test("workspace provides project sidebar, creation dialog and four distinct pane
   assert.match(html, /id="newProjectDialog"/);
   assert.match(html, /id="projectCount"/);
   assert.match(html, /id="projectHeading"/);
-  assert.match(html, /class="summary-grid"/);
+  assert.match(html, /class="project-inspector hidden"/);
+  assert.match(html, /id="manageDialog"/);
+  assert.match(html, /id="recentVersionList"/);
   for (const name of ["overview", "versions", "shares", "deploy"]) {
     assert.match(html, new RegExp('data-tab="' + name + '"'));
     assert.match(html, new RegExp('data-panel="' + name + '"'));
@@ -45,23 +47,41 @@ test("all in-page scripts compile as JavaScript", () => {
   }
 });
 
-test("light workspace matches project-list and project-details design with functional modules", () => {
+test("focuses the sidebar on projects and places features in selected project cards", () => {
   assert.match(html, /class="app-layout"/);
   assert.match(html, /class="app-sidebar"/);
   assert.match(html, /class="project-table-head"/);
   assert.match(html, /class="content-grid"/);
   assert.match(html, /--bg:#f6f8fc/);
-  for (const module of ["projects", "shares", "deploy", "stats", "settings"]) {
-    assert.match(html, new RegExp('data-module="' + module + '"'));
-  }
+  assert.equal((html.match(/class="side-nav side-nav-current"/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /data-module="(shares|deploy|stats|settings)"/);
+  assert.match(html, /id="activeShareCount"/);
+  assert.match(html, /id="shareVisitCount"/);
+  assert.match(html, /id="deployStatus"/);
+  assert.match(html, /id="latestDeployTime"/);
+  assert.match(html, /id="recentVersionList"/);
+  assert.match(html, /id="previewQuickToggle"/);
   assert.match(html, /id="versionUploadDialog"/);
   assert.match(html, /id="openUploadDialog"/);
   assert.match(html, /id="openUploadDialogDetail"/);
   assert.match(html, /id="goShareDetail"/);
-  assert.match(html, /function activateModule\(module\)/);
+  assert.match(html, /function openManagePanel\(tab\)/);
   assert.match(html, /function openVersionDialog\(\)/);
-  // Do not re-introduce mocked top search or unused workspace switching.
-  assert.doesNotMatch(html, /产品设计工作区|搜索项目、版本或分享/);
+  assert.match(html, /function renderRecentVersions\(\)/);
+  assert.doesNotMatch(html, /产品设计工作区|搜索项目、版本或分享|200 MB/);
+});
+
+test("the version upload dialog has working file and paste modes", () => {
+  assert.match(html, /id="versionDropzone"/);
+  assert.match(html, /id="versionFilePanel"/);
+  assert.match(html, /id="versionHtmlPanel"/);
+  assert.match(html, /id="versionHtml"/);
+  assert.match(html, /data-upload-mode="file"/);
+  assert.match(html, /data-upload-mode="html"/);
+  assert.match(html, /function setVersionUploadMode\(mode\)/);
+  assert.match(html, /new DataTransfer\(\)/);
+  assert.match(html, /body: JSON\.stringify\(\{ html \}\)/);
+  assert.match(html, /method: "POST", body: fd/);
 });
 
 test("project creation accepts established manual or localhost cookie session", () => {
