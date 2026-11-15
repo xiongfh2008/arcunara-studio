@@ -209,7 +209,7 @@ test("lists projects newest first with enriched metadata", async () => {
   for (const p of projects) {
     assert.deepEqual(
       Object.keys(p).sort(),
-      ["createdAt", "currentVersion", "fileCount", "id", "name", "totalSize", "updatedAt"]
+      ["createdAt", "currentVersion", "fileCount", "id", "name", "previewEnabled", "totalSize", "updatedAt"]
     );
     assert.equal(p.currentVersion, 1);
     assert.equal(p.fileCount, 1);

@@ -1,4 +1,4 @@
-# 开发进度记录 — P0 HTML 托管 MVP（v0.3.0）
+﻿# 开发进度记录 — P0 HTML 托管 MVP（v0.3.0）
 
 分支：`feature/hosting-mvp`（基于 main @ `8fc9a61`，v0.2.0 工程基线）
 
@@ -128,3 +128,14 @@
 - **detail.isAxure** 字段（additive）→ 工作台链接显示"安全预览（页面目录）"
 - **测试**：新增 `tests/axure.test.mjs` 12 项（双标记检测/误分类回归/导航页内容与排除/转义与 textContent 渲染/逐段编码回程（%41 不解码）/原始入口保留/非 Axure 不受影响/版本回滚清单一致/meta 隐藏）；全量 **115/115 通过**
 - **P1 播放器研究**（本地最小实验 + 静态扫描，详见 KNOWN_LIMITATIONS）：mainFrame 停留 about:blank 因 sandbox opaque origin 无法被父页驱动写入；本地 allow-same-origin 实验使 sitemap 面板部分恢复（证实根因），mainFrame 仍空白 → 完整兼容需多项被禁止的放宽，RC3 以安全预览导航替代；实验已完整还原
+
+## RC5：项目管理、原型分享与访问统计 — ✅ 已完成
+
+- **项目管理（任务 A）**：`PATCH /api/projects/{id}`（name/description/previewEnabled，UUID 与数据不变、项目级锁、原子写入）；列表/详情新增 `previewEnabled`（缺省=启用，legacy 兼容）与 `isAxure` 类型展示；工作台新增按名称/ID 搜索、编辑表单、预览启停按钮（二次确认）
+- **服务端预览门禁**：`previewEnabled:false` 时 `/p/{uuid}` 的入口页、全部静态资源与裸 ID 重定向一律 404（非仅隐藏前端链接）；分享链接不受项目停用影响，由分享自身状态管理
+- **原型分享（任务 B/C）**：`/s/{shareId}.{secret}/` 路径级 Token —— secret 为 32 字节密码学随机值（base64url 43 字符），仅 SHA-256 哈希入 meta.json，timing-safe 比较；Token 内嵌于 URL 路径使原型内全部相对子资源（HTML/JS/CSS/图片/字体）自动携带凭证并被逐请求重新校验（非仅入口页保护）；撤销/停用/过期/凭证错误/未知 ID 一律 404；跨项目无法用他人 Token 访问（Token 绑定唯一项目）；API：创建/列表/撤销/启停；分享状态=有效/已过期/已撤销/已停用
+- **版本耦合（任务 D）**：分享始终指向当前版本（上传新版本、回滚后同一链接内容立即跟随）；meta 级字段保留使版本发布/回滚不丢失分享配置；工作台回滚增加二次确认与当前版本标识
+- **访问统计（任务 E）**：仅根文档请求计次（子资源/iframe 页面/HEAD 不计）；记录最近访问时间与状态（成功/过期拒绝/已撤销/已停用/凭证错误）；拒绝访问不计数；项目级总访问汇总展示
+- **Axure 兼容**：导航页改为按 base 路径渲染（`/p/{id}` 或 `/s/{token}`），分享域下全部页面链接与"原始入口"均为分享域，无开放预览 URL 泄露；RC4 搜索/宽度切换保留
+- **测试**：新增 `tests/rc5-projects.test.mjs`（7 项）与 `tests/rc5-shares.test.mjs`（15 项，含原始 socket 穿越探测、跨项目隔离、过期/撤销/启停全状态、CSP 回归、统计去重计次）；全量 **144/144 通过**，lint 30 文件通过，preflight 通过
+- **真实 Chromium E2E**：工作台 6 步全过（Token 连接/搜索过滤/详情/编辑保存/分享表格/预览启停）；分享访问 9 步全过（CSS 渲染、沙箱下 JS 交互、分享域 Axure 导航页、页面搜索、iframe 切换、宽度预设、原始入口、开放预览兼容）；侧栏中文乱码确认为 E2E 手写 ZIP fixture 缺 UTF-8 标志位（0x800），产品经 zipbuilder 断言与 RC2 真实 POBO 样本验证无此问题

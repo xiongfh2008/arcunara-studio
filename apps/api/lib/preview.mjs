@@ -23,6 +23,12 @@ import { inspectAxureProject, renderNavPage } from "./axure.mjs";
 
 const PREVIEW_RE = /^\/p\/([0-9a-f-]{36})(\/.*)?$/;
 
+// RC5 gated share route: /s/{shareId}.{secret}(/{path}). The secret rides
+// in the path so relative subresource URLs (CSS/JS/img/fonts inside the
+// prototype) resolve against the same token-protected prefix — every asset
+// request is re-validated server-side, there is no entry-page-only guard.
+const SHARE_RE = /^\/s\/([0-9a-f]{16})\.([A-Za-z0-9_-]{43})(\/.*)?$/;
+
 // Strict allowlist — anything not listed is refused (executables, wasm,
 // server-side templates, archives, ...).
 const MIME_TYPES = {
@@ -224,12 +230,131 @@ export function createPreviewHandler({ store }) {
     stream.pipe(res);
   }
 
-  async function serveEntry(res, id, dir, entryPoint, { headOnly = false }) {
+  async function serveEntry(res, basePath, dir, entryPoint, { headOnly = false }) {
     if (entryPoint !== "index.html") {
-      return redirect(res, `/p/${id}/${encodeURI(entryPoint)}`);
+      return redirect(res, `${basePath}/${encodeURI(entryPoint)}`);
     }
 
     return serveFile(res, dir, ["index.html"], { headOnly });
+  }
+
+  // Shared serving core for /p/{id}/... and /s/{token}/...: resolves the
+  // current version directory for `id`, serves the Axure nav page or the
+  // requested file. All path-safety rules are identical on both routes.
+  async function serveProjectPath(res, id, basePath, rest, { headOnly = false } = {}) {
+    const dir = await lookupProjectDir(id);
+
+    if (!dir) {
+      return notFound(res);
+    }
+
+    if (rest === "/") {
+      const meta = await store.readRawMeta(id);
+      const entry = await store.currentVersionEntry(id, meta);
+      const sourceDir = store.versionSourceDir(id, entry);
+
+      // Axure exports land on the platform safe-preview directory page;
+      // the native index.html player stays reachable at its plain URL
+      // ({base}/index.html) for debugging. Everything else — non-Axure
+      // projects and Axure exports without business pages — keeps the
+      // RC2 entry behavior unchanged.
+      let axure = null;
+
+      try {
+        axure = await inspectAxureProject(sourceDir);
+      } catch (err) {
+        console.error("Preview axure-inspect error:", err?.message ?? err);
+        axure = null;
+      }
+
+      if (axure && axure.isAxure && axure.pages.length > 0) {
+        const html = renderNavPage(basePath, axure.pages);
+        res.writeHead(200, {
+          ...NAV_HEADERS,
+          "Content-Length": Buffer.byteLength(html)
+        });
+        if (headOnly) {
+          return res.end();
+        }
+        return res.end(html);
+      }
+
+      return await serveEntry(res, basePath, dir, entry.entryPoint, { headOnly });
+    }
+
+    // Split RAW path (literal "/" only), then decode each segment —
+    // %2F can never introduce new separators and %2e%2e cannot traverse.
+    const rawSegments = rest.slice(1).split("/");
+
+    if (rawSegments[rawSegments.length - 1] === "") {
+      return notFound(res); // no directory listings/indexes
+    }
+
+    const segments = [];
+
+    for (const raw of rawSegments) {
+      const segment = decodeSegment(raw);
+
+      if (!segment) {
+        return notFound(res);
+      }
+
+      segments.push(segment);
+    }
+
+    return await serveFile(res, dir, segments, { headOnly });
+  }
+
+  // Gated share access: validates the token against fresh meta on EVERY
+  // request (entry page, HTML pages, and each static subresource). Any
+  // failure is an indistinguishable 404. Root-document requests update the
+  // lightweight access stats.
+  async function handleShareRequest(req, res, match, { headOnly }) {
+    const [, shareId, secret, rest] = match;
+    const basePath = `/s/${shareId}.${secret}`;
+
+    if (!rest) {
+      // Bare token — normalize to the trailing-slash share URL.
+      return redirect(res, `${basePath}/`);
+    }
+
+    let verdict;
+
+    try {
+      verdict = await store.validateShare(shareId, secret);
+    } catch (err) {
+      console.error("Share validation error:", err?.message ?? err);
+      return notFound(res);
+    }
+
+    if (!verdict) {
+      return notFound(res);
+    }
+
+    if (verdict.reason) {
+      // Located but denied — record the outcome without counting a visit.
+      try {
+        await store.recordShareAccess(shareId, verdict.reason);
+      } catch {}
+      return notFound(res);
+    }
+
+    if (rest === "/" && req.method === "GET") {
+      // One share visit = one root-document request. Iframe page navigations
+      // and static assets are NOT counted (they use deeper paths).
+      try {
+        await store.recordShareAccess(shareId, "ok");
+      } catch {}
+    }
+
+    try {
+      return await serveProjectPath(res, verdict.projectId, basePath, rest, {
+        headOnly
+      });
+    } catch (err) {
+      console.error("Share serve error:", err?.message ?? err);
+      return notFound(res);
+    }
   }
 
   return async function handle(req, res) {
@@ -245,6 +370,16 @@ export function createPreviewHandler({ store }) {
 
     const pathname = new URL(req.url || "/", "http://localhost").pathname;
 
+    const shareMatch = SHARE_RE.exec(pathname);
+
+    if (shareMatch) {
+      if (method !== "GET") {
+        return notFound(res);
+      }
+
+      return await handleShareRequest(req, res, shareMatch, { headOnly });
+    }
+
     const match = PREVIEW_RE.exec(pathname);
 
     if ((method !== "GET" && method !== "HEAD") || !match) {
@@ -254,73 +389,27 @@ export function createPreviewHandler({ store }) {
     const id = match[1];
     const rest = match[2];
 
-    if (!rest) {
-      // Bare project id — normalize to the trailing-slash preview URL.
-      return redirect(res, `/p/${id}/`);
-    }
-
     try {
-      const dir = await lookupProjectDir(id);
+      const meta = await store.readRawMeta(id);
 
-      if (!dir) {
+      if (!meta) {
         return notFound(res);
       }
 
-      if (rest === "/") {
-        const meta = await store.readRawMeta(id);
-        const entry = await store.currentVersionEntry(id, meta);
-        const sourceDir = store.versionSourceDir(id, entry);
-
-        // Axure exports land on the platform safe-preview directory page;
-        // the native index.html player stays reachable at its plain URL
-        // (/p/{id}/index.html) for debugging. Everything else — non-Axure
-        // projects and Axure exports without business pages — keeps the
-        // RC2 entry behavior unchanged.
-        let axure = null;
-
-        try {
-          axure = await inspectAxureProject(sourceDir);
-        } catch (err) {
-          console.error("Preview axure-inspect error:", err?.message ?? err);
-          axure = null;
-        }
-
-        if (axure && axure.isAxure && axure.pages.length > 0) {
-          const html = renderNavPage(id, axure.pages);
-          res.writeHead(200, {
-            ...NAV_HEADERS,
-            "Content-Length": Buffer.byteLength(html)
-          });
-          if (headOnly) {
-            return res.end();
-          }
-          return res.end(html);
-        }
-
-        return await serveEntry(res, id, dir, entry.entryPoint, { headOnly });
+      // RC5: server-side preview gate. A disabled project returns the same
+      // 404 for its entry page AND every static resource (and for the bare
+      // canonical redirect) — hiding links in the workbench alone would not
+      // stop direct access.
+      if (meta.previewEnabled === false) {
+        return notFound(res);
       }
 
-      // Split RAW path (literal "/" only), then decode each segment —
-      // %2F can never introduce new separators and %2e%2e cannot traverse.
-      const rawSegments = rest.slice(1).split("/");
-
-      if (rawSegments[rawSegments.length - 1] === "") {
-        return notFound(res); // no directory listings/indexes
+      if (!rest) {
+        // Bare project id — normalize to the trailing-slash preview URL.
+        return redirect(res, `/p/${id}/`);
       }
 
-      const segments = [];
-
-      for (const raw of rawSegments) {
-        const segment = decodeSegment(raw);
-
-        if (!segment) {
-          return notFound(res);
-        }
-
-        segments.push(segment);
-      }
-
-      return await serveFile(res, dir, segments, { headOnly });
+      return await serveProjectPath(res, id, `/p/${id}`, rest, { headOnly });
     } catch (err) {
       console.error("Preview error:", err?.message ?? err);
       return notFound(res);

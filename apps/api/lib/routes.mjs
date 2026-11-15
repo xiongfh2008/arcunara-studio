@@ -17,6 +17,10 @@ const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
+const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
+const SHARE_ACTION_RE = new RegExp(
+  `^/api/projects/${PROJECT_ID}/shares/([0-9a-f]{16})/(revoke|enable|disable)$`
+);
 
 // The legacy JSON html cap — intentionally kept byte-identical with v0.2.0.
 const LEGACY_HTML_BYTES = 180000;
@@ -133,23 +137,98 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
 
       const detailMatch = DETAIL_RE.exec(pathname);
 
-      if (detailMatch && req.method === "GET") {
+      if (detailMatch) {
         const id = detailMatch[1];
-        const view = await store.getProject(id);
 
-        // Additive RC3 field: the workbench labels Axure projects with the
-        // safe-preview entry (page directory) instead of the raw player.
-        try {
-          const meta = await store.readRawMeta(id);
-          const entry = await store.currentVersionEntry(id, meta);
-          view.isAxure = (
-            await inspectAxureProject(store.versionSourceDir(id, entry))
-          ).isAxure;
-        } catch {
-          view.isAxure = false;
+        if (req.method === "GET") {
+          const view = await store.getProject(id);
+
+          // Additive RC3 field: the workbench labels Axure projects with the
+          // safe-preview entry (page directory) instead of the raw player.
+          try {
+            const meta = await store.readRawMeta(id);
+            const entry = await store.currentVersionEntry(id, meta);
+            view.isAxure = (
+              await inspectAxureProject(store.versionSourceDir(id, entry))
+            ).isAxure;
+          } catch {
+            view.isAxure = false;
+          }
+
+          return sendJson(res, 200, view);
         }
 
-        return sendJson(res, 200, view);
+        // RC5: edit project name/description/previewEnabled. Additive and
+        // idempotent; the project id and all stored data are unchanged.
+        if (req.method === "PATCH") {
+          const payload = await readJsonPayload(req, config.limits);
+          const patch = {};
+
+          for (const key of ["name", "description", "previewEnabled"]) {
+            if (payload[key] !== undefined) {
+              patch[key] = payload[key];
+            }
+          }
+
+          const view = await store.updateProject(id, patch);
+          return sendJson(res, 200, view);
+        }
+      }
+
+      const sharesMatch = SHARES_RE.exec(pathname);
+
+      if (sharesMatch) {
+        const id = sharesMatch[1];
+
+        if (req.method === "GET") {
+          return sendJson(res, 200, await store.listShares(id));
+        }
+
+        if (req.method === "POST") {
+          const payload = await readJsonPayload(req, config.limits);
+          let expiresAt = null;
+
+          if (payload.expiresAt !== undefined && payload.expiresAt !== null) {
+            if (typeof payload.expiresAt !== "string") {
+              throw new ApiError(400, "Invalid expiresAt", "INVALID_EXPIRES_AT");
+            }
+            expiresAt = payload.expiresAt;
+          } else if (typeof payload.expiresInHours === "number") {
+            if (
+              !Number.isFinite(payload.expiresInHours) ||
+              payload.expiresInHours <= 0 ||
+              payload.expiresInHours > 24 * 365
+            ) {
+              throw new ApiError(
+                400,
+                "Invalid expiresInHours",
+                "INVALID_EXPIRES_AT"
+              );
+            }
+            expiresAt = new Date(
+              Date.now() + payload.expiresInHours * 3600 * 1000
+            ).toISOString();
+          }
+
+          const share = await store.createShare(id, { expiresAt });
+          return sendJson(res, 201, share);
+        }
+      }
+
+      const shareActionMatch = SHARE_ACTION_RE.exec(pathname);
+
+      if (shareActionMatch && req.method === "POST") {
+        const [, id, shareId, action] = shareActionMatch;
+
+        if (action === "revoke") {
+          return sendJson(res, 200, await store.revokeShare(id, shareId));
+        }
+
+        if (action === "enable") {
+          return sendJson(res, 200, await store.setShareEnabled(id, shareId, true));
+        }
+
+        return sendJson(res, 200, await store.setShareEnabled(id, shareId, false));
       }
 
       return sendJson(res, 404, { error: "Not Found" });

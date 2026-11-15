@@ -67,6 +67,11 @@ v0.2.0 旧项目（根目录 `index.html` + `meta.json`）按"隐式 v1（legacy
 | `POST /api/projects/{id}/versions` | 上传新版本（multipart 文件或 JSON `{html}`） | 201 `{projectId,version,createdAt,fileCount,totalSize,entryPoint,previewPath,currentVersion}` | 404 / 400 / 413 / 415 |
 | `GET /api/projects/{id}/versions` | 版本历史（升序 + isCurrent） | 200 `{projectId,versions:[...]}` | 404 |
 | `POST /api/projects/{id}/rollback` | 回滚 `{version:N}`，幂等 | 200 `{projectId,ok,rolledBack,currentVersion,previewPath}` | 404 / 400 `INVALID_VERSION` / `VERSION_NOT_FOUND` |
+| `PATCH /api/projects/{id}` | RC5：编辑 `{name?, description?, previewEnabled?}`，UUID 与数据不变 | 200 详情视图 | 404 / 400 `NAME_REQUIRED` / `NAME_TOO_LONG` / `INVALID_PREVIEW_ENABLED` |
+| `GET /api/projects/{id}/shares` | RC5：分享列表（无凭证明文） | 200 `{projectId,shares:[{id,createdAt,expiresAt,status,enabled,revoked,accessCount,lastAccessAt,lastAccessStatus}]}` | 404 |
+| `POST /api/projects/{id}/shares` | RC5：创建分享 `{expiresAt? \| expiresInHours?}`（均缺省=永久）；`token` 仅创建响应返回一次 | 201 `{...,token:"{shareId}.{secret}"}` | 400 `INVALID_EXPIRES_AT` |
+| `POST /api/projects/{id}/shares/{shareId}/revoke` | RC5：撤销（永久） | 200 分享视图（status=revoked） | 404 `SHARE_NOT_FOUND` |
+| `POST /api/projects/{id}/shares/{shareId}/enable` / `disable` | RC5：启停分享（撤销后禁止再启用） | 200 分享视图 | 404 / 400 `SHARE_REVOKED` |
 
 JSON 创建（legacy 兼容）：错误信息与 v0.2.0 逐字一致（`Invalid name or HTML` / `Invalid JSON` / `Request too large` / `Use application/json...`）；响应新增字段（additive）。
 
@@ -80,8 +85,10 @@ ZIP 安全错误码：`INVALID_ZIP`、`UNSAFE_ENTRY_PATH`、`SYMLINK_ENTRY`、`U
 
 | 请求 | 行为 |
 | --- | --- |
-| `GET/HEAD /p/{uuid}/` | 200 入口页（entry ≠ index.html 时 302 到入口）；`/p/{uuid}` 302 补斜杠 |
+| `GET/HEAD /p/{uuid}/` | 200 入口页（entry ≠ index.html 时 302 到入口）；`/p/{uuid}` 302 补斜杠；RC5：项目 `previewEnabled:false` 时页面与全部资源一律 404 |
 | `GET/HEAD /p/{uuid}/{path}` | 200 静态文件（MIME 白名单；未知扩展名 404） |
+| `GET/HEAD /s/{shareId}.{secret}/` | RC5：受限分享访问，逐请求校验分享有效性（撤销/停用/过期/凭证错误一律 404）；根文档计一次访问；Axure 项目渲染分享域导航页 |
+| `GET/HEAD /s/{shareId}.{secret}/{path}` | RC5：分享内静态资源，同一 Token 全量保护 |
 | 其他 | 404 纯文本 `Not Found` |
 
 固定响应头：`Cache-Control: no-store`、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff`、CSP（sandbox opaque origin + 'self' 子资源 + data: URI，`form-action 'self'`、`base-uri 'none'`、`object-src 'none'`）。逐段 URL 解码与校验、原始 `..`/`.` 段拒绝、点文件与 `meta.json` 永不服务、逐级符号链接检查。安全边界详见 `docs/KNOWN_LIMITATIONS.md`。

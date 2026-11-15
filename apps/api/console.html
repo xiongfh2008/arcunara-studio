@@ -8,7 +8,7 @@
   :root {
     --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2a2f3a;
     --text: #e6e9ef; --muted: #8b93a3; --accent: #5b8cff; --accent2: #7c5bff;
-    --ok: #3fb97f; --err: #e5484d; --radius: 10px;
+    --ok: #3fb97f; --err: #e5484d; --warn: #d9a13b; --radius: 10px;
   }
   * { box-sizing: border-box; }
   body {
@@ -43,8 +43,9 @@
   button:disabled { opacity: .5; cursor: default; }
   button.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
   button.danger { background: var(--err); }
+  button.warn { background: var(--warn); color: #1a1a1a; }
   main {
-    display: grid; grid-template-columns: 380px 1fr; gap: 16px;
+    display: grid; grid-template-columns: 420px 1fr; gap: 16px;
     padding: 16px 24px; align-items: start;
   }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
@@ -56,15 +57,18 @@
   ul.projects { list-style: none; margin: 0; padding: 0; }
   ul.projects li {
     padding: 10px; border: 1px solid var(--border); border-radius: 8px;
-    margin-bottom: 8px; cursor: pointer; display: flex; gap: 8px; align-items: baseline;
+    margin-bottom: 8px; cursor: pointer;
   }
   ul.projects li:hover { border-color: var(--accent); }
   ul.projects li.active { border-color: var(--accent); background: var(--panel2); }
-  ul.projects .name { font-weight: 600; }
+  ul.projects .toprow { display: flex; gap: 8px; align-items: baseline; }
+  ul.projects .name { font-weight: 600; word-break: break-all; }
   ul.projects .meta { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  ul.projects .sub { color: var(--muted); font-size: 12px; margin-top: 4px; word-break: break-all; }
   label.field { display: block; margin-bottom: 10px; }
   label.field span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-  label.field input[type="text"], label.field textarea, label.field input[type="file"] {
+  label.field input[type="text"], label.field textarea, label.field input[type="file"],
+  label.field select {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
     font-family: inherit;
@@ -75,17 +79,23 @@
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; word-break: break-all; }
   .link { color: var(--accent); cursor: pointer; text-decoration: none; word-break: break-all; }
-  table.versions { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.versions th, table.versions td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  table.versions th { color: var(--muted); font-weight: 600; }
-  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  table.versions, table.shares { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.versions th, table.versions td, table.shares th, table.shares td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.versions th, table.shares th { color: var(--muted); font-weight: 600; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); display: inline-block; }
   .tag.current { color: var(--ok); border-color: var(--ok); }
+  .tag.active { color: var(--ok); border-color: var(--ok); }
+  .tag.expired { color: var(--warn); border-color: var(--warn); }
+  .tag.revoked, .tag.disabled { color: var(--err); border-color: var(--err); }
   #feedback:empty { display: none; }
   #feedback { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; white-space: pre-wrap; }
   #feedback.ok { background: rgba(63,185,127,.12); border: 1px solid var(--ok); }
   #feedback.err { background: rgba(229,72,77,.12); border: 1px solid var(--err); }
   .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
   .hidden { display: none; }
+  .section { margin-top: 20px; }
+  input.search { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: inherit; margin-bottom: 10px; }
+  .statline { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -134,6 +144,7 @@
 
     <div class="card">
       <h2>项目列表</h2>
+      <input type="search" id="projectSearch" class="search" placeholder="按名称或 ID 搜索项目" autocomplete="off">
       <ul class="projects" id="projectList"></ul>
       <div class="row"><button id="refreshBtn" class="ghost">刷新列表</button></div>
     </div>
@@ -147,21 +158,60 @@
       <button id="copyLink" class="ghost">复制预览链接</button>
     </div>
 
-    <h2>上传新版本</h2>
+    <h2>基本信息</h2>
+    <label class="field"><span>项目名称</span>
+      <input type="text" id="editName" maxlength="100">
+    </label>
+    <label class="field"><span>描述（留空即清除）</span>
+      <input type="text" id="editDesc" maxlength="1000">
+    </label>
+    <div class="row" style="margin-bottom:8px">
+      <button id="saveInfoBtn">保存修改</button>
+      <button id="togglePreviewBtn" class="warn">停用预览</button>
+    </div>
+    <p class="hint">停用预览后，旧预览地址 /p/{id}/ 的页面与全部静态资源都会被服务端拒绝（404）；已创建的分享链接不受影响，可在分享管理中单独撤销或停用。</p>
+
+    <h2 class="section">上传新版本</h2>
     <div class="row" style="margin-bottom:16px">
       <input type="file" id="versionFile" accept=".html,.htm,.zip" style="color:var(--text)">
       <button id="uploadVersionBtn">上传为新版本</button>
     </div>
 
-    <h2>历史版本</h2>
+    <h2 class="section">历史版本</h2>
     <table class="versions" id="versionTable">
       <thead><tr><th>版本</th><th>时间</th><th>文件数</th><th>大小</th><th>入口</th><th>状态</th><th></th></tr></thead>
       <tbody id="versionRows"></tbody>
     </table>
     <div class="row" style="margin-top:10px">
       <button id="rollbackBtn" class="danger">回滚到选中版本</button>
-      <span class="hint">回滚只切换当前版本指针，预览链接不变。</span>
+      <span class="hint">回滚只切换当前版本指针，预览链接与分享链接不变，都指向当前版本。</span>
     </div>
+
+    <h2 class="section">分享管理</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label class="field" style="margin:0"><span>有效期</span>
+        <select id="shareExpiry">
+          <option value="0">永久有效</option>
+          <option value="24">1 天</option>
+          <option value="168">7 天</option>
+          <option value="720">30 天</option>
+        </select>
+      </label>
+      <button id="createShareBtn">创建分享链接</button>
+    </div>
+    <p class="hint">分享链接对页面及其全部 JS / CSS / 图片 / 字体资源生效；服务端逐请求校验有效性。创建后仅展示一次完整链接，请立即复制保存。</p>
+    <div id="newShareBox" class="hidden" style="margin-bottom:12px">
+      <div class="row">
+        <a id="newShareLink" class="link" target="_blank" rel="noopener noreferrer"></a>
+        <button id="copyNewShare" class="ghost">复制分享链接</button>
+      </div>
+    </div>
+    <p id="shareStats" class="statline"></p>
+    <table class="shares" id="shareTable">
+      <thead><tr><th>分享 ID</th><th>状态</th><th>创建时间</th><th>过期时间</th><th>总访问</th><th>最近访问</th><th>最近访问状态</th><th>操作</th></tr></thead>
+      <tbody id="shareRows"></tbody>
+    </table>
+    <p id="noShares" class="hint">当前没有分享链接</p>
   </section>
 </main>
 
@@ -173,10 +223,13 @@ let token = null;
 let projects = [];
 let selected = null;
 let versions = [];
+let shares = [];
 let selectedVersion = null;
 let limits = null; // fetched from /api/limits after connect (null until then)
 let creating = false; // double-submit guards
 let uploadingVersion = false;
+let savingInfo = false;
+let creatingShare = false;
 
 const FALLBACK_LIMITS = {
   maxZipBytes: 20 * 1024 * 1024,
@@ -196,15 +249,20 @@ const $ = (id) => document.getElementById(id);
 // Preview links are built from the server-injected browser-facing wiring:
 // an absolute public base URL when configured, otherwise same-host + the
 // actual bound preview port. No token is ever part of a preview URL.
-function previewUrlFor(id) {
-  const path = `/p/${id}/`;
-
-  if (window.__PREVIEW_BASE__) {
-    return `${window.__PREVIEW_BASE__}${path}`;
-  }
-
+function previewBase() {
+  if (window.__PREVIEW_BASE__) return window.__PREVIEW_BASE__;
   const port = window.__PREVIEW_PORT__ || window.location.port;
-  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`;
+  return `${window.location.protocol}//${window.location.hostname}:${port}`;
+}
+
+function previewUrlFor(id) {
+  return `${previewBase()}/p/${id}/`;
+}
+
+// Share links: /s/{shareId}.{secret}/ — the token is part of the path so
+// every subresource request stays protected (relative URLs keep the prefix).
+function shareUrlFor(tokenStr) {
+  return `${previewBase()}/s/${tokenStr}/`;
 }
 
 function feedback(message, ok) {
@@ -218,6 +276,12 @@ function fmtBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1048576) return `${(n / 1024).toFixed(1)} KiB`;
   return `${(n / 1048576).toFixed(1)} MiB`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 }
 
 function api(path, options = {}) {
@@ -302,30 +366,48 @@ async function loadProjects() {
   renderProjects();
 }
 
+function projectMatches(p, query) {
+  if (!query) return true;
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+}
+
 function renderProjects() {
   const list = $("projectList");
   list.textContent = "";
+  const query = $("projectSearch").value;
+  const visible = projects.filter((p) => projectMatches(p, query));
 
-  if (projects.length === 0) {
+  if (visible.length === 0) {
     const li = document.createElement("li");
-    li.textContent = "暂无项目";
+    li.textContent = query ? "没有匹配的项目" : "暂无项目";
     li.style.color = "var(--muted)";
     list.appendChild(li);
     return;
   }
 
-  for (const p of projects) {
+  for (const p of visible) {
     const li = document.createElement("li");
     if (selected && selected.id === p.id) li.className = "active";
 
+    const top = document.createElement("div");
+    top.className = "toprow";
     const name = document.createElement("span");
     name.className = "name";
     name.textContent = p.name;
     const meta = document.createElement("span");
     meta.className = "meta";
     meta.textContent = `v${p.currentVersion} · ${p.fileCount} 文件 · ${fmtBytes(p.totalSize)}`;
+    top.append(name, meta);
 
-    li.append(name, meta);
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    const type = p.isAxure === true ? "Axure 原型" : p.isAxure === false ? "HTML 原型" : "原型";
+    const state = p.previewEnabled === false ? "预览已停用" : "预览启用中";
+    sub.textContent = `${type} · ${state} · 更新于 ${fmtTime(p.updatedAt)}`;
+
+    li.append(top, sub);
     li.addEventListener("click", () => selectProject(p.id));
     list.appendChild(li);
   }
@@ -335,6 +417,7 @@ async function selectProject(id) {
   try {
     selected = await api(`/api/projects/${id}`);
     versions = (await api(`/api/projects/${id}/versions`)).versions;
+    shares = (await api(`/api/projects/${id}/shares`)).shares;
     selectedVersion = versions.find((v) => v.isCurrent)?.version ?? null;
     renderDetail();
     renderProjects();
@@ -357,20 +440,30 @@ function renderDetail() {
   meta.textContent = "";
 
   meta.append(...kv("ID", selected.id));
+  meta.append(...kv("类型", selected.isAxure ? "Axure 原型" : "HTML 原型"));
   meta.append(...kv("名称", selected.name));
   if (selected.description) meta.append(...kv("描述", selected.description));
   meta.append(...kv("当前版本", `v${selected.currentVersion}`));
   meta.append(...kv("入口文件", selected.entryPoint));
   meta.append(...kv("文件数", String(selected.fileCount)));
   meta.append(...kv("总大小", fmtBytes(selected.totalSize)));
-  meta.append(...kv("创建时间", selected.createdAt));
-  meta.append(...kv("更新时间", selected.updatedAt));
+  meta.append(...kv("创建时间", fmtTime(selected.createdAt)));
+  meta.append(...kv("更新时间", fmtTime(selected.updatedAt)));
+  meta.append(...kv("预览状态", selected.previewEnabled === false ? "已停用" : "启用中"));
+
+  $("editName").value = selected.name;
+  $("editDesc").value = selected.description ?? "";
+
+  const toggle = $("togglePreviewBtn");
+  toggle.textContent = selected.previewEnabled === false ? "启用预览" : "停用预览";
 
   const link = $("previewLink");
-  link.textContent = selected.isAxure
-    ? `安全预览（页面目录）${selected.previewPath}`
-    : selected.previewPath;
-  link.href = previewUrlFor(selected.id);
+  link.textContent = selected.previewEnabled === false
+    ? "预览已停用（服务端已拒绝访问）"
+    : selected.isAxure
+      ? `安全预览（页面目录）${selected.previewPath}`
+      : selected.previewPath;
+  link.href = selected.previewEnabled === false ? "" : previewUrlFor(selected.id);
 
   const rows = $("versionRows");
   rows.textContent = "";
@@ -380,7 +473,7 @@ function renderDetail() {
 
     const cells = [
       `v${v.version}`,
-      new Date(v.createdAt).toLocaleString(),
+      fmtTime(v.createdAt),
       String(v.fileCount),
       fmtBytes(v.totalSize),
       v.entryPoint,
@@ -404,6 +497,131 @@ function renderDetail() {
     tr.appendChild(tdAction);
 
     rows.appendChild(tr);
+  }
+
+  renderShares();
+}
+
+const SHARE_STATUS_LABEL = {
+  active: "有效",
+  expired: "已过期",
+  revoked: "已撤销",
+  disabled: "已停用"
+};
+
+const SHARE_ACCESS_LABEL = {
+  ok: "成功",
+  expired: "过期拒绝",
+  revoked: "已撤销",
+  disabled: "已停用",
+  bad_token: "凭证错误"
+};
+
+function renderShares() {
+  const rows = $("shareRows");
+  rows.textContent = "";
+  $("noShares").hidden = shares.length !== 0;
+
+  const totalVisits = shares.reduce((m, s) => m + (s.accessCount ?? 0), 0);
+  $("shareStats").textContent = `项目分享总访问次数：${totalVisits}`;
+
+  for (const s of shares) {
+    const tr = document.createElement("tr");
+
+    const tdId = document.createElement("td");
+    tdId.textContent = s.id.slice(0, 8) + "…";
+    tr.appendChild(tdId);
+
+    const tdStatus = document.createElement("td");
+    const tag = document.createElement("span");
+    tag.className = `tag ${s.status}`;
+    tag.textContent = SHARE_STATUS_LABEL[s.status] ?? s.status;
+    tdStatus.appendChild(tag);
+    tr.appendChild(tdStatus);
+
+    for (const text of [
+      fmtTime(s.createdAt),
+      s.expiresAt ? fmtTime(s.expiresAt) : "永久",
+      String(s.accessCount ?? 0),
+      fmtTime(s.lastAccessAt),
+      s.lastAccessStatus ? (SHARE_ACCESS_LABEL[s.lastAccessStatus] ?? s.lastAccessStatus) : "-"
+    ]) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+
+    const tdOps = document.createElement("td");
+    tdOps.className = "row";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.textContent = "复制链接";
+    copyBtn.className = "ghost";
+    copyBtn.dataset.shareToken = s.token ?? "";
+    copyBtn.disabled = !s.token;
+    if (!s.token) copyBtn.title = "完整链接仅在创建时展示一次";
+    copyBtn.addEventListener("click", () => copyShare(copyBtn));
+    tdOps.appendChild(copyBtn);
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "ghost";
+    toggleBtn.textContent = s.enabled && !s.revoked ? "停用" : "启用";
+    toggleBtn.addEventListener("click", () => toggleShare(s, toggleBtn));
+    toggleBtn.disabled = s.revoked;
+    tdOps.appendChild(toggleBtn);
+
+    const revokeBtn = document.createElement("button");
+    revokeBtn.className = "danger";
+    revokeBtn.textContent = "撤销";
+    revokeBtn.disabled = s.revoked;
+    revokeBtn.addEventListener("click", () => revokeShare(s, revokeBtn));
+    tdOps.appendChild(revokeBtn);
+
+    tr.appendChild(tdOps);
+    rows.appendChild(tr);
+  }
+}
+
+async function copyShare(btn) {
+  const tokenStr = btn.dataset.shareToken;
+  if (!tokenStr) { feedback("该分享链接仅在创建时展示一次，无法再次复制", false); return; }
+  try {
+    await navigator.clipboard.writeText(shareUrlFor(tokenStr));
+    feedback("分享链接已复制", true);
+  } catch {
+    window.prompt("复制分享链接：", shareUrlFor(tokenStr));
+  }
+}
+
+async function toggleShare(s, btn) {
+  const disabling = s.enabled && !s.revoked;
+  if (disabling && !window.confirm(`确定停用分享 ${s.id.slice(0, 8)}…？停用后该链接立即无法访问（可再启用）。`)) return;
+  if (!disabling && !window.confirm(`确定启用分享 ${s.id.slice(0, 8)}…？`)) return;
+
+  setBusy(btn, true, "处理中…");
+  try {
+    await api(`/api/projects/${selected.id}/shares/${s.id}/${disabling ? "disable" : "enable"}`, { method: "POST" });
+    feedback(disabling ? "分享已停用" : "分享已启用", true);
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`操作失败：${err.message}`, false);
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+async function revokeShare(s, btn) {
+  if (!window.confirm(`确定撤销分享 ${s.id.slice(0, 8)}…？撤销后该链接永久失效，不可恢复。`)) return;
+
+  setBusy(btn, true, "处理中…");
+  try {
+    await api(`/api/projects/${selected.id}/shares/${s.id}/revoke`, { method: "POST" });
+    feedback("分享已撤销", true);
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`撤销失败：${err.message}`, false);
+  } finally {
+    setBusy(btn, false);
   }
 }
 
@@ -432,6 +650,8 @@ $("refreshBtn").addEventListener("click", async () => {
     feedback(`刷新失败：${err.message}`, false);
   }
 });
+
+$("projectSearch").addEventListener("input", renderProjects);
 
 $("createBtn").addEventListener("click", async () => {
   const btn = $("createBtn");
@@ -480,6 +700,61 @@ $("createBtn").addEventListener("click", async () => {
   }
 });
 
+$("saveInfoBtn").addEventListener("click", async () => {
+  const btn = $("saveInfoBtn");
+  if (btn.disabled) return;
+  if (!selected) { feedback("请先选择项目", false); return; }
+
+  const name = $("editName").value.trim();
+  if (!name) { feedback("项目名称不能为空", false); return; }
+
+  savingInfo = true;
+  setBusy(btn, true, "保存中…");
+  try {
+    const updated = await api(`/api/projects/${selected.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, description: $("editDesc").value.trim() })
+    });
+    feedback(`已保存：${updated.name}`, true);
+    selected = updated;
+    await loadProjects();
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`保存失败：${friendlyError(err)}`, false);
+  } finally {
+    savingInfo = false;
+    setBusy(btn, false);
+  }
+});
+
+$("togglePreviewBtn").addEventListener("click", async () => {
+  const btn = $("togglePreviewBtn");
+  if (btn.disabled) return;
+  if (!selected) { feedback("请先选择项目", false); return; }
+
+  const disabling = selected.previewEnabled !== false;
+  if (disabling && !window.confirm("确定停用该项目预览？停用后旧预览地址及其全部资源将立即被服务端拒绝（404）。")) return;
+  if (!disabling && !window.confirm("确定启用该项目预览？")) return;
+
+  setBusy(btn, true, "处理中…");
+  try {
+    const updated = await api(`/api/projects/${selected.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ previewEnabled: !disabling })
+    });
+    feedback(disabling ? "预览已停用（服务端已拒绝 /p/ 访问）" : "预览已启用", true);
+    selected = updated;
+    await loadProjects();
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`操作失败：${err.message}`, false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+
 $("uploadVersionBtn").addEventListener("click", async () => {
   const btn = $("uploadVersionBtn");
 
@@ -495,7 +770,7 @@ $("uploadVersionBtn").addEventListener("click", async () => {
     const fd = new FormData();
     fd.set("file", file, file.name);
     const v = await api(`/api/projects/${selected.id}/versions`, { method: "POST", body: fd });
-    feedback(`已发布 v${v.version}`, true);
+    feedback(`已发布 v${v.version}，分享链接继续指向当前版本`, true);
     $("versionFile").value = "";
     await selectProject(selected.id);
     await loadProjects();
@@ -510,6 +785,11 @@ $("uploadVersionBtn").addEventListener("click", async () => {
 $("rollbackBtn").addEventListener("click", async () => {
   if (!selected) { feedback("请先选择项目", false); return; }
   if (!selectedVersion) { feedback("请先选择目标版本", false); return; }
+  if (selectedVersion === selected.currentVersion) {
+    feedback("所选版本已是当前版本", false);
+    return;
+  }
+  if (!window.confirm(`确定回滚到 v${selectedVersion}？预览与分享链接不变，将立即展示该版本内容。`)) return;
 
   try {
     const r = await api(`/api/projects/${selected.id}/rollback`, {
@@ -517,7 +797,7 @@ $("rollbackBtn").addEventListener("click", async () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ version: selectedVersion })
     });
-    feedback(r.rolledBack ? `已回滚到 v${r.currentVersion}，预览链接不变` : `当前已是 v${r.currentVersion}`, true);
+    feedback(r.rolledBack ? `已回滚到 v${r.currentVersion}，预览与分享链接不变` : `当前已是 v${r.currentVersion}`, true);
     await selectProject(selected.id);
     await loadProjects();
   } catch (err) {
@@ -525,8 +805,39 @@ $("rollbackBtn").addEventListener("click", async () => {
   }
 });
 
+$("createShareBtn").addEventListener("click", async () => {
+  const btn = $("createShareBtn");
+  if (btn.disabled) return;
+  if (!selected) { feedback("请先选择项目", false); return; }
+
+  creatingShare = true;
+  setBusy(btn, true, "创建中…");
+  try {
+    const hours = Number($("shareExpiry").value);
+    const s = await api(`/api/projects/${selected.id}/shares`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(hours > 0 ? { expiresInHours: hours } : {})
+    });
+    feedback("分享链接已创建（完整链接仅展示这一次）", true);
+    $("newShareBox").classList.remove("hidden");
+    $("newShareLink").textContent = shareUrlFor(s.token);
+    $("newShareLink").href = shareUrlFor(s.token);
+    $("copyNewShare").dataset.shareToken = s.token;
+    await selectProject(selected.id);
+  } catch (err) {
+    feedback(`创建失败：${friendlyError(err)}`, false);
+  } finally {
+    creatingShare = false;
+    setBusy(btn, false);
+  }
+});
+
+$("copyNewShare").addEventListener("click", () => copyShare($("copyNewShare")));
+
 $("copyLink").addEventListener("click", async () => {
   if (!selected) return;
+  if (selected.previewEnabled === false) { feedback("预览已停用，旧预览链接不可用", false); return; }
   const url = previewUrlFor(selected.id);
   try {
     await navigator.clipboard.writeText(url);
@@ -537,7 +848,7 @@ $("copyLink").addEventListener("click", async () => {
 });
 
 $("previewLink").addEventListener("click", (e) => {
-  if (selected) {
+  if (selected && selected.previewEnabled !== false) {
     e.preventDefault();
     window.open(previewUrlFor(selected.id), "_blank", "noopener");
   }

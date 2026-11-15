@@ -65,9 +65,11 @@ export async function inspectAxureProject(versionDir) {
   return { isAxure, pages: isAxure ? businessPages(files) : [] };
 }
 
-function encodePreviewPath(id, page) {
-  // Per-segment encoding only — never raw concatenation of file names.
-  return `/p/${id}/${page.split("/").map(encodeURIComponent).join("/")}`;
+// Builds page URLs under a preview base path — "/p/{id}" for the open
+// preview or "/s/{shareId}.{secret}" for a gated share. Per-segment
+// encoding only — never raw concatenation of file names.
+function encodePreviewPath(base, page) {
+  return `${base}/${page.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 // Resolves a location.hash fragment (without "#") to an index in the page
@@ -125,11 +127,13 @@ export function matchNavSearch(pages, query) {
 
 // Server-rendered navigation page: directory sidebar + sandboxed preview
 // iframe. Rendered names go through JSON + textContent; no user HTML is
-// ever injected into this platform page.
-export function renderNavPage(id, pages) {
+// ever injected into this platform page. `base` is the URL prefix all page
+// links are built under (share-scoped links keep the token on every
+// subresource request automatically via relative URL resolution).
+export function renderNavPage(base, pages) {
   const items = pages.map((page) => ({
     name: page.replace(/\.html?$/i, ""),
-    href: encodePreviewPath(id, page)
+    href: encodePreviewPath(base, page)
   }));
 
   // JSON-embed for the client script; escape "<" so "</script>" in a file
@@ -184,7 +188,7 @@ export function renderNavPage(id, pages) {
   <span class="tag" id="count"></span>
   <span class="spacer"></span>
   <a id="openStandalone" href="#" target="_blank" rel="noopener noreferrer">独立页面</a>
-  <a id="rawEntry" href="/p/${id}/index.html">原始入口（index.html，调试用）</a>
+  <a id="rawEntry" href="${base}/index.html">原始入口（index.html，调试用）</a>
 </header>
 <main>
   <nav aria-label="业务页面目录">

@@ -16,6 +16,15 @@ import path from "node:path";
 import { ApiError } from "./httputil.mjs";
 
 const UUID_RE = /^[0-9a-f-]{36}$/;
+const SHARE_ID_RE = /^[0-9a-f]{16}$/;
+
+// RC5 share tokens: {shareId}.{secret} — the secret is 32 random bytes
+// (base64url, 43 chars); only its SHA-256 hash is persisted in meta.json.
+const SHARE_SECRET_BYTES = 32;
+
+function hashShareSecret(secret) {
+  return crypto.createHash("sha256").update(secret, "utf8").digest("hex");
+}
 
 function now() {
   return new Date().toISOString();
@@ -48,6 +57,58 @@ export function createStore(config) {
     const task = prev.catch(() => {}).then(fn);
     locks.set(key, task.catch(() => {}));
     return task;
+  }
+
+  // Share index: shareId -> projectId. The validation path re-reads the
+  // fresh meta from disk every time — the index only locates the project,
+  // so a stale entry can never authorize access on its own. Rebuilt by a
+  // full meta scan when an unknown shareId is requested.
+  const shareIndex = new Map();
+  const projectShareIds = new Map();
+  let shareIndexFullyBuilt = false;
+
+  function indexProjectShares(id, meta) {
+    for (const old of projectShareIds.get(id) ?? []) {
+      if (shareIndex.get(old) === id) shareIndex.delete(old);
+    }
+    const ids = new Set();
+    if (Array.isArray(meta.shares)) {
+      for (const s of meta.shares) {
+        if (s && typeof s.id === "string" && SHARE_ID_RE.test(s.id)) {
+          shareIndex.set(s.id, id);
+          ids.add(s.id);
+        }
+      }
+    }
+    if (ids.size > 0 || Array.isArray(meta.shares)) {
+      projectShareIds.set(id, ids);
+    }
+  }
+
+  async function rebuildShareIndex() {
+    shareIndex.clear();
+    projectShareIds.clear();
+    const entries = await fs.readdir(root, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !UUID_RE.test(entry.name)) continue;
+      const meta = await readRawMeta(entry.name);
+      if (meta) indexProjectShares(entry.name, meta);
+    }
+
+    shareIndexFullyBuilt = true;
+  }
+
+  // Locates the project owning a share id (null when unknown). Unknown ids
+  // trigger one full scan; a miss afterwards is authoritative.
+  async function locateShareProject(shareId) {
+    if (!SHARE_ID_RE.test(shareId)) return null;
+
+    if (!shareIndex.has(shareId) && !shareIndexFullyBuilt) {
+      await rebuildShareIndex();
+    }
+
+    return shareIndex.get(shareId) ?? null;
   }
 
   async function init() {
@@ -92,6 +153,7 @@ export function createStore(config) {
     });
 
     await fs.rename(tmp, file);
+    indexProjectShares(id, meta); // keep the share index in sync
   }
 
   function isLegacy(meta) {
@@ -146,7 +208,10 @@ export function createStore(config) {
       updatedAt: meta.updatedAt ?? meta.createdAt,
       currentVersion: entry.version,
       fileCount: entry.fileCount,
-      totalSize: entry.totalSize
+      totalSize: entry.totalSize,
+      // RC5: absent flag means enabled (v0.2.0/v0.3.0-RC4 compatibility —
+      // existing projects never lose their open preview behavior).
+      previewEnabled: meta.previewEnabled !== false
     };
 
     if (meta.description !== undefined) {
@@ -387,6 +452,294 @@ export function createStore(config) {
     });
   }
 
+  // RC5: edits project metadata (name/description/previewEnabled). The
+  // project id, versions, shares and all other meta fields are preserved —
+  // this never recreates the project directory.
+  async function updateProject(id, patch) {
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      if (patch.name !== undefined) {
+        if (typeof patch.name !== "string" || !patch.name.trim()) {
+          throw new ApiError(400, "Name is required", "NAME_REQUIRED");
+        }
+
+        if (patch.name.trim().length > 100) {
+          throw new ApiError(
+            400,
+            "Name is too long (max 100 characters)",
+            "NAME_TOO_LONG"
+          );
+        }
+
+        meta.name = patch.name.trim();
+      }
+
+      if (patch.description !== undefined) {
+        if (typeof patch.description !== "string") {
+          throw new ApiError(400, "Invalid description", "INVALID_DESCRIPTION");
+        }
+
+        const value = patch.description.trim().slice(0, 1000);
+        if (value.length > 0) {
+          meta.description = value;
+        } else {
+          delete meta.description; // explicit clear
+        }
+      }
+
+      if (patch.previewEnabled !== undefined) {
+        if (typeof patch.previewEnabled !== "boolean") {
+          throw new ApiError(
+            400,
+            "previewEnabled must be a boolean",
+            "INVALID_PREVIEW_ENABLED"
+          );
+        }
+
+        meta.previewEnabled = patch.previewEnabled;
+      }
+
+      meta.updatedAt = now();
+      await writeMetaAtomic(id, meta);
+
+      return getProject(id);
+    });
+  }
+
+  // ---- RC5 share management ---------------------------------------------
+
+  function shareView(s) {
+    // Status precedence: revoked > disabled > expired > active.
+    let status = "active";
+
+    if (s.revokedAt) {
+      status = "revoked";
+    } else if (s.enabled === false) {
+      status = "disabled";
+    } else if (s.expiresAt && Date.parse(s.expiresAt) <= Date.now()) {
+      status = "expired";
+    }
+
+    const view = {
+      id: s.id,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt ?? null,
+      status,
+      enabled: s.enabled !== false,
+      revoked: Boolean(s.revokedAt),
+      accessCount: s.accessCount ?? 0,
+      lastAccessAt: s.lastAccessAt ?? null,
+      lastAccessStatus: s.lastAccessStatus ?? null
+    };
+
+    if (s.revokedAt) view.revokedAt = s.revokedAt;
+
+    return view;
+  }
+
+  async function createShare(id, { expiresAt = null } = {}) {
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      let expires = null;
+
+      if (expiresAt !== null && expiresAt !== undefined) {
+        if (typeof expiresAt !== "string" || !Number.isFinite(Date.parse(expiresAt))) {
+          throw new ApiError(400, "Invalid expiresAt", "INVALID_EXPIRES_AT");
+        }
+
+        expires = new Date(Date.parse(expiresAt)).toISOString();
+
+        if (Date.parse(expires) <= Date.now()) {
+          throw new ApiError(
+            400,
+            "expiresAt must be in the future",
+            "INVALID_EXPIRES_AT"
+          );
+        }
+      }
+
+      const shareId = crypto.randomBytes(8).toString("hex");
+      const secret = crypto
+        .randomBytes(SHARE_SECRET_BYTES)
+        .toString("base64url");
+      const createdAt = now();
+
+      const share = {
+        id: shareId,
+        tokenHash: hashShareSecret(secret), // plaintext secret never stored
+        createdAt,
+        expiresAt: expires,
+        enabled: true,
+        accessCount: 0,
+        lastAccessAt: null,
+        lastAccessStatus: null
+      };
+
+      if (!Array.isArray(meta.shares)) meta.shares = [];
+      meta.shares.push(share);
+
+      try {
+        await writeMetaAtomic(id, meta);
+      } catch (err) {
+        meta.shares.pop();
+        throw err;
+      }
+
+      return {
+        ...shareView(share),
+        projectId: id,
+        // Returned exactly once; only the hash is persisted.
+        token: `${shareId}.${secret}`
+      };
+    });
+  }
+
+  async function listShares(id) {
+    const meta = await readRawMeta(id);
+
+    if (!meta) {
+      throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+    }
+
+    return {
+      projectId: id,
+      shares: (Array.isArray(meta.shares) ? meta.shares : [])
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map(shareView)
+    };
+  }
+
+  // Mutates one share record under the project lock; fn receives the fresh
+  // share object from meta and may mutate it in place.
+  async function mutateShare(id, shareId, fn) {
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      const share = (Array.isArray(meta.shares) ? meta.shares : []).find(
+        (s) => s.id === shareId
+      );
+
+      if (!share) {
+        throw new ApiError(404, "Share Not Found", "SHARE_NOT_FOUND");
+      }
+
+      fn(share);
+      await writeMetaAtomic(id, meta);
+
+      return { projectId: id, ...shareView(share) };
+    });
+  }
+
+  async function revokeShare(id, shareId) {
+    return mutateShare(id, shareId, (s) => {
+      s.revokedAt = now();
+    });
+  }
+
+  async function setShareEnabled(id, shareId, enabled) {
+    return mutateShare(id, shareId, (s) => {
+      if (s.revokedAt) {
+        throw new ApiError(
+          400,
+          "Revoked shares cannot be re-enabled",
+          "SHARE_REVOKED"
+        );
+      }
+
+      s.enabled = Boolean(enabled);
+    });
+  }
+
+  // Validates a share for preview access. Returns
+  // {projectId, share, reason:null} on success, {projectId, share, reason}
+  // on a located-but-denied share, or null when the share id is unknown.
+  async function validateShare(shareId, secret) {
+    const projectId = await locateShareProject(shareId);
+
+    if (!projectId) {
+      return null;
+    }
+
+    const meta = await readRawMeta(projectId); // fresh read, never cached
+    const share = (Array.isArray(meta?.shares) ? meta.shares : []).find(
+      (s) => s.id === shareId
+    );
+
+    if (!share) {
+      return null;
+    }
+
+    if (share.revokedAt) {
+      return { projectId, share, reason: "revoked" };
+    }
+
+    if (share.enabled === false) {
+      return { projectId, share, reason: "disabled" };
+    }
+
+    if (share.expiresAt && Date.parse(share.expiresAt) <= Date.now()) {
+      return { projectId, share, reason: "expired" };
+    }
+
+    const expected = Buffer.from(share.tokenHash ?? "", "hex");
+    const actual = Buffer.from(hashShareSecret(secret), "hex");
+
+    if (
+      expected.length !== 32 ||
+      actual.length !== expected.length ||
+      !crypto.timingSafeEqual(actual, expected)
+    ) {
+      return { projectId, share, reason: "bad_token" };
+    }
+
+    return { projectId, share, reason: null };
+  }
+
+  // Lightweight access bookkeeping: root-document requests only. Runs under
+  // the project lock so it can never clobber a concurrent version publish.
+  async function recordShareAccess(shareId, status) {
+    const projectId = await locateShareProject(shareId);
+
+    if (!projectId) {
+      return;
+    }
+
+    await withLock(projectId, async () => {
+      const meta = await readRawMeta(projectId);
+
+      if (!meta) return;
+
+      const share = (Array.isArray(meta.shares) ? meta.shares : []).find(
+        (s) => s.id === shareId
+      );
+
+      if (!share) return;
+
+      if (status === "ok") {
+        share.accessCount = (share.accessCount ?? 0) + 1;
+      }
+
+      share.lastAccessAt = now();
+      share.lastAccessStatus = status;
+      await writeMetaAtomic(projectId, meta);
+    });
+  }
+
   return {
     root,
     tmpDir,
@@ -404,6 +757,14 @@ export function createStore(config) {
     createProject,
     addVersion,
     listVersions,
-    rollback
+    rollback,
+    updateProject,
+    createShare,
+    listShares,
+    revokeShare,
+    setShareEnabled,
+    validateShare,
+    recordShareAccess,
+    locateShareProject
   };
 }
