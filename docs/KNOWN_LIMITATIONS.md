@@ -88,6 +88,22 @@
 
 **仍待完成**：跨页面交互（按钮跳转、面板动作）的系统性回归仅做了抽样；未覆盖 Axure 播放器全部功能。
 
+## 原生 Axure 播放器（index.html）空白根因研究（RC3）
+
+真实 POBO 样本在沙箱下播放器现象：页面壳渲染（缩放控件），**内容区域 mainFrame 空白**、站点地图面板为空、Console 出现 localStorage SecurityError / XHR 失败 / Google Fonts 拦截。逐项定位：
+
+| 现象 | 根因（实测证据） | 最小可行方案 | 风险 | RC3 决定 |
+| --- | --- | --- | --- | --- |
+| mainFrame 停留 about:blank | 播放器脚本以同源方式驱动内容 iframe（document.write / contentDocument 写入）；sandbox 使父子均为 opaque origin，父无法访问子文档（实测 `contentDocument === null`） | 无（需修改上传内容或开放 allow-same-origin） | allow-same-origin 使预览内容获得预览源同源权限，破坏平台隔离模型（被禁止放宽） | ❌ 不纳入；以安全预览导航页替代其导航职能 |
+| 站点地图面板为空 | 站点地图数据经相对 XHR/初始化流程加载，opaque origin 下 `connect-src 'self'` 不匹配任何目标 → 请求被阻 | 无（同上） | 同上 | ❌ 不纳入 |
+| 本地实验佐证 | 临时 `allow-same-origin`（仅本地、已完整还原）使 sitemap 面板恢复可见 → 证实根因是 origin 隔离；但 mainFrame 仍空白（还存在 XHR/驱动链路问题） | — | — | 实验性证据，不部署 |
+| frame_ant.js / 播放器 localStorage SecurityError | opaque origin 下 `localStorage` 属性访问即抛 SecurityError（RC1 探测已证实） | 无（需 allow-same-origin 或注入 shim；注入违反"不修改上传内容"） | 同上 | ❌ 不纳入 |
+| frame-src 缺失 | RC3 前未显式声明 frame-src；实测同源 iframe 在 default-src 回退下仍可加载；播放器空白与 frame-src 无关 | 导航页显式 `frame-src 'self'`（已随导航页加入，仅限本版本页面） | 极低（self 限定） | ✅ 已随导航页纳入 |
+| XHR/CORS 报错 | 同 connect-src 结论；核心页面渲染与交互（表单/弹窗/下拉）不依赖 XHR，不受影响 | — | — | 无需处理 |
+| Google Fonts / bootcss 外链被阻 | CSP `default-src 'none'` 阻止全部外链（预期行为） | 自托管字体/样式 | 引入第三方源扩大攻击面（被禁止） | ❌ 不纳入 |
+
+**结论**：原生播放器完全兼容需要 `allow-same-origin` + `connect-src` 放宽 + 上传内容修改，三者均违反本项目安全模型。RC3 的安全预览导航页覆盖其导航职能（12 业务页面目录 + iframe 隔离预览 + 独立页面入口），原生 index.html 保留为调试入口。
+
 ## 浏览器测试
 
 - 已用真实 Chromium（ZCode 内置浏览器）完成端到端人工验证：CSS 实际生效（computed style）、图片实际解码（naturalWidth）、按钮脚本交互、页面导航、工作台连接。

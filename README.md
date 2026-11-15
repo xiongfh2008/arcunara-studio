@@ -28,7 +28,7 @@ arcunara-studio/
 │   └── rp-converter/      # HTML → .rp 转换器（未实现，占位）
 ├── infra/
 │   └── docker/            # Dockerfile + 独立开发环境 compose（28088/28089）
-├── tests/                 # 102 个零依赖集成测试（node:test）+ helpers
+├── tests/                 # 116 个零依赖集成测试（node:test）+ helpers
 ├── scripts/syntax-check.mjs
 ├── docs/
 │   ├── development.md         # 开发说明（API 规范、环境变量、结构）
@@ -76,7 +76,7 @@ curl http://127.0.0.1:28088/health   # {"ok":true,...,"version":"0.3.0"}
 ## 测试
 
 ```bash
-npm test        # 102 个集成测试：API 回归 / 上传引擎 / 恶意 ZIP / 预览穿越 / 版本回滚 / 工作台
+npm test        # 116 个集成测试：API 回归 / 上传引擎 / 恶意 ZIP / 预览穿越 / 版本回滚 / 工作台
 npm run lint    # node --check 全部 .mjs
 ```
 

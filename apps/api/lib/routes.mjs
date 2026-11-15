@@ -11,6 +11,7 @@ import path from "node:path";
 import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
 import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
+import { inspectAxureProject } from "./axure.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
@@ -133,7 +134,21 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
       const detailMatch = DETAIL_RE.exec(pathname);
 
       if (detailMatch && req.method === "GET") {
-        const view = await store.getProject(detailMatch[1]);
+        const id = detailMatch[1];
+        const view = await store.getProject(id);
+
+        // Additive RC3 field: the workbench labels Axure projects with the
+        // safe-preview entry (page directory) instead of the raw player.
+        try {
+          const meta = await store.readRawMeta(id);
+          const entry = await store.currentVersionEntry(id, meta);
+          view.isAxure = (
+            await inspectAxureProject(store.versionSourceDir(id, entry))
+          ).isAxure;
+        } catch {
+          view.isAxure = false;
+        }
+
         return sendJson(res, 200, view);
       }
 

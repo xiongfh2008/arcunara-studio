@@ -23,7 +23,8 @@ async function existsFile(p) {
 }
 
 // Relative POSIX paths of all regular files below dir.
-async function walkFiles(dir, prefix = "") {
+// (Also used by lib/axure.mjs for feature-based export detection.)
+export async function walkFiles(dir, prefix = "") {
   const files = [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
 
