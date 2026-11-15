@@ -157,6 +157,8 @@ table.versions td:nth-child(7){text-align:right}
   // (Docker host mapping / dedicated preview origin), else null.
   window.__PREVIEW_PORT__ = __ARCU_PREVIEW_PORT__;
   window.__PREVIEW_BASE__ = __ARCU_PREVIEW_BASE__;
+  // Boolean only: no administrator credential is ever injected into HTML.
+  window.__ARCU_LOCAL_AUTO_LOGIN__ = __ARCU_LOCAL_AUTO_LOGIN__;
 </script>
 <header class="shell-header">
   <div class="brand">
@@ -169,7 +171,7 @@ table.versions td:nth-child(7){text-align:right}
 <div class="tokenbar" id="tokenbar">
   <input type="password" id="tokenInput" placeholder="粘贴 API Token（仅保存在内存中，刷新即失效）" autocomplete="off">
   <button id="saveToken">连接</button>
-  <span class="hint">Token 不会写入 localStorage / sessionStorage / Cookie，也不会出现在页面源码中。</span>
+  <span class="hint">手动 Token 只保存在当前页面内存；仅本地自动模式使用独立的 HttpOnly 临时会话 Cookie。</span>
 </div>
 
 <div id="feedback" class="hidden" role="status" aria-live="polite"></div>
@@ -449,6 +451,12 @@ function fmtTime(iso) {
 function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
+  // The local HttpOnly cookie is sent automatically on same-origin fetches.
+  // A non-simple header and browser Origin check protect write requests.
+  if (window.__ARCU_LOCAL_AUTO_LOGIN__ && !token &&
+      !["GET", "HEAD"].includes((options.method || "GET").toUpperCase())) {
+    headers["X-Arcunara-Local-Request"] = "1";
+  }
   return fetch(path, { ...options, headers }).then(async (res) => {
     let json = null;
     try { json = await res.json(); } catch { /* non-JSON */ }
@@ -518,7 +526,9 @@ function setBusy(btn, busy, busyLabel) {
 }
 
 function setAuthorized(ok) {
-  $("authBadge").textContent = ok ? "已连接" : "连接 API";
+  $("authBadge").textContent = ok
+    ? (window.__ARCU_LOCAL_AUTO_LOGIN__ && !token ? "本地已连接" : "已连接")
+    : "连接 API";
   $("authBadge").style.color = ok ? "var(--ok)" : "var(--muted)";
   $("tokenbar").classList.toggle("collapsed", ok);
   $("connectionToggle").setAttribute("aria-expanded", String(!ok));
@@ -1276,6 +1286,27 @@ $("previewLink").addEventListener("click", (e) => {
     window.open(previewUrlFor(selected.id), "_blank", "noopener");
   }
 });
+
+// Local development: the server has just set an HttpOnly, SameSite=Strict
+// cookie while serving /console. Fetches use it without showing a login
+// prompt or putting the administrator API token into page source/storage.
+if (window.__ARCU_LOCAL_AUTO_LOGIN__) {
+  $("tokenbar").classList.add("collapsed");
+  $("connectionToggle").classList.add("hidden");
+  (async () => {
+    try {
+      const data = await api("/api/limits");
+      limits = data.limits ?? null;
+      await loadProjects();
+      setAuthorized(true);
+    } catch (err) {
+      // Fail closed. Manual bearer-token connection remains available.
+      $("connectionToggle").classList.remove("hidden");
+      setAuthorized(false);
+      feedback("本地自动连接失败，请检查服务配置：" + friendlyError(err), false);
+    }
+  })();
+}
 </script>
 </body>
 </html>
