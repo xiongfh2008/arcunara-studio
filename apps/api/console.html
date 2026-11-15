@@ -367,7 +367,9 @@ function renderDetail() {
   meta.append(...kv("更新时间", selected.updatedAt));
 
   const link = $("previewLink");
-  link.textContent = selected.previewPath;
+  link.textContent = selected.isAxure
+    ? `安全预览（页面目录）${selected.previewPath}`
+    : selected.previewPath;
   link.href = previewUrlFor(selected.id);
 
   const rows = $("versionRows");

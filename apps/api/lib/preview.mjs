@@ -19,6 +19,7 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import { isValidSegment, safeJoin } from "./pathsafety.mjs";
+import { inspectAxureProject, renderNavPage } from "./axure.mjs";
 
 const PREVIEW_RE = /^\/p\/([0-9a-f-]{36})(\/.*)?$/;
 
@@ -76,6 +77,31 @@ const BASE_HEADERS = {
     "object-src 'none'; " +
     "base-uri 'none'; " +
     "form-action 'self'"
+};
+
+// Platform-provided safe-preview navigation page for Axure exports. It is
+// PLATFORM UI but still served on the untrusted preview origin, so it is
+// sandboxed like every other preview document (opaque origin, no
+// same-origin privileges) and contains no secrets. frame-src 'self' means
+// "same origin as the preview server" — it is NOT scoped to a single
+// project UUID; the project scoping comes from the code, which only ever
+// assigns iframe URLs from this project's own rendered page list (and
+// sandboxed frames cannot read cross-project responses regardless).
+const NAV_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy":
+    "sandbox allow-scripts; " +
+    "default-src 'none'; " +
+    "script-src 'unsafe-inline'; " +
+    "style-src 'unsafe-inline'; " +
+    "frame-src 'self'; " +
+    "object-src 'none'; " +
+    "base-uri 'none'; " +
+    "form-action 'none'; " +
+    "frame-ancestors 'none'"
 };
 
 function notFound(res) {
@@ -243,6 +269,34 @@ export function createPreviewHandler({ store }) {
       if (rest === "/") {
         const meta = await store.readRawMeta(id);
         const entry = await store.currentVersionEntry(id, meta);
+        const sourceDir = store.versionSourceDir(id, entry);
+
+        // Axure exports land on the platform safe-preview directory page;
+        // the native index.html player stays reachable at its plain URL
+        // (/p/{id}/index.html) for debugging. Everything else — non-Axure
+        // projects and Axure exports without business pages — keeps the
+        // RC2 entry behavior unchanged.
+        let axure = null;
+
+        try {
+          axure = await inspectAxureProject(sourceDir);
+        } catch (err) {
+          console.error("Preview axure-inspect error:", err?.message ?? err);
+          axure = null;
+        }
+
+        if (axure && axure.isAxure && axure.pages.length > 0) {
+          const html = renderNavPage(id, axure.pages);
+          res.writeHead(200, {
+            ...NAV_HEADERS,
+            "Content-Length": Buffer.byteLength(html)
+          });
+          if (headOnly) {
+            return res.end();
+          }
+          return res.end(html);
+        }
+
         return await serveEntry(res, id, dir, entry.entryPoint, { headOnly });
       }
 

@@ -89,12 +89,12 @@ ZIP 安全错误码：`INVALID_ZIP`、`UNSAFE_ENTRY_PATH`、`SYMLINK_ENTRY`、`U
 ## 测试
 
 ```bash
-npm test        # 全部测试（102 个，约 50s）
+npm test        # 全部测试（116 个，约 60s）
 npm run lint    # node --check 全部项目 .mjs
 npm run preflight   # 部署配置预检（Compose 项目名/端口/卷隔离）
 ```
 
-测试文件：`api.test.mjs`（回归+详情）、`upload.test.mjs`（上传引擎）、`zipsecurity.test.mjs`（恶意 ZIP）、`preview.test.mjs`（预览与穿越）、`versions.test.mjs`（版本与 legacy）、`console.test.mjs`（工作台与预览链接生成）、`quota.test.mjs`（RC2 大型 Axure ZIP 配额）、`deploy-config.test.mjs`（部署配置回归）。`tests/helpers/` 提供子进程启动 harness 与测试专用 ZIP 构造器。
+测试文件：`api.test.mjs`（回归+详情）、`upload.test.mjs`（上传引擎）、`zipsecurity.test.mjs`（恶意 ZIP）、`preview.test.mjs`（预览与穿越）、`versions.test.mjs`（版本与 legacy）、`console.test.mjs`（工作台与预览链接生成）、`quota.test.mjs`（RC2 大型 Axure ZIP 配额）、`axure.test.mjs`（RC3 Axure 检测与安全预览导航）、`deploy-config.test.mjs`（部署配置回归）。`tests/helpers/` 提供子进程启动 harness 与测试专用 ZIP 构造器。
 
 测试以子进程运行真实服务（临时目录 + 127.0.0.1 + 随机端口），不触碰 VPS 数据或生产端口。浏览器端到端验证以真实 Chromium 完成（记录于 `docs/DEVELOPMENT_PROGRESS.md`）；Playwright 自动化测试为后续待办。
 
