@@ -33,6 +33,11 @@ export async function startServer(envOverrides = {}) {
       ARCU_PREVIEW_PORT: "0",
       // Never inherit a developer's opt-in localhost browser session during tests.
       ARCU_LOCAL_AUTO_LOGIN: "0",
+      // Keep Cloudflare staging SSO out of unrelated integration tests.
+      ARCU_ACCESS_ISSUER: "",
+      ARCU_ACCESS_AUDIENCE: "",
+      ARCU_ACCESS_ADMIN_EMAIL: "",
+      ARCU_ACCESS_ORIGIN: "",
       ...envOverrides
     },
     stdio: ["ignore", "pipe", "pipe"]
