@@ -33,7 +33,7 @@ const api = http.createServer(
   createApiHandler({ config, store, auth, version: VERSION, getPreviewPort: () => getPreviewPort() })
 );
 
-const preview = http.createServer(createPreviewHandler({ store }));
+const preview = http.createServer(createPreviewHandler({ store, config }));
 
 api.listen(config.apiPort, config.apiHost, () => {
   console.log(`Arcunara API v0.3 started on port ${api.address().port}`);
