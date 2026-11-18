@@ -43,6 +43,14 @@ services:
       # any workbench code changes. Never includes tokens.
       - "ARCU_PREVIEW_PUBLIC_BASE_URL=${ARCU_PREVIEW_PUBLIC_BASE_URL:-http://127.0.0.1:28089}"
 
+      # Opt-in Cloudflare Access SSO for the staging admin console. All four
+      # values must be set together (via private, gitignored root .env).
+      # Never enable ARCU_LOCAL_AUTO_LOGIN in the VPS container.
+      - "ARCU_ACCESS_ISSUER=${ARCU_ACCESS_ISSUER:-}"
+      - "ARCU_ACCESS_AUDIENCE=${ARCU_ACCESS_AUDIENCE:-}"
+      - "ARCU_ACCESS_ADMIN_EMAIL=${ARCU_ACCESS_ADMIN_EMAIL:-}"
+      - "ARCU_ACCESS_ORIGIN=${ARCU_ACCESS_ORIGIN:-}"
+
       # Internal test-env quotas, sized for real Axure RP11 exports
       # (2,786 entries / 4.6 MiB max HTML / 72.6 MiB total — see
       # docs/KNOWN_LIMITATIONS.md). Production-safe defaults live in
