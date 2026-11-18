@@ -93,6 +93,49 @@ export function loadConfig(env = process.env) {
     throw new Error("ARCU_LOCAL_AUTO_LOGIN requires both API and preview to bind 127.0.0.1");
   }
 
+  // Cloudflare Access SSO is explicitly configured for a single HTTPS
+  // hostname and one administrator email. Never implicitly trust edge headers.
+  const accessEnvNames = [
+    "ARCU_ACCESS_ISSUER",
+    "ARCU_ACCESS_AUDIENCE",
+    "ARCU_ACCESS_ADMIN_EMAIL",
+    "ARCU_ACCESS_ORIGIN"
+  ];
+  const accessValues = accessEnvNames.map(name => (env[name] || "").trim());
+  const accessSetCount = accessValues.filter(Boolean).length;
+  let cloudflareAccess = null;
+  if (accessSetCount > 0) {
+    if (accessSetCount !== accessValues.length) {
+      throw new Error("Cloudflare Access requires all four ARCU_ACCESS_* settings");
+    }
+    if (localAutoLogin) {
+      throw new Error("Cloudflare Access and local auto login cannot both be enabled");
+    }
+    const [issuer, audience, email, origin] = accessValues;
+    let issUrl, siteUrl;
+    try {
+      issUrl = new URL(issuer);
+      siteUrl = new URL(origin);
+    } catch {
+      throw new Error("Cloudflare Access issuer and origin must be valid HTTPS URLs");
+    }
+    if (issUrl.protocol !== "https:" ||
+        !/^[a-z0-9-]+[.]cloudflareaccess[.]com$/.test(issUrl.hostname) ||
+        issUrl.origin !== issuer || !/^[0-9a-f]{64}$/i.test(audience) ||
+        siteUrl.protocol !== "https:" || siteUrl.origin !== origin ||
+        siteUrl.hostname === issUrl.hostname ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Invalid Cloudflare Access origin, issuer, audience or admin email");
+    }
+    cloudflareAccess = {
+      issuer,
+      audience,
+      email: email.toLowerCase(),
+      origin,
+      host: siteUrl.host
+    };
+  }
+
   // Larger, previously tested Axure-export profile for explicitly enabled
   // loopback-only development. The normal production defaults stay strict.
   // Explicit ARCU_MAX_* overrides always take precedence.
@@ -115,6 +158,7 @@ export function loadConfig(env = process.env) {
 
 
   return {
+    cloudflareAccess,
     localAutoLogin,
     store: env.ARCU_DATA_DIR || "/app/data",
     token,
