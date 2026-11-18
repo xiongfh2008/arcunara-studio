@@ -20,6 +20,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import { isValidSegment, safeJoin } from "./pathsafety.mjs";
 import { inspectAxureProject, renderNavPage } from "./axure.mjs";
+import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
 
 const PREVIEW_RE = /^\/p\/([0-9a-f-]{36})(\/.*)?$/;
 
@@ -145,7 +146,14 @@ function decodeSegment(raw) {
   return segment;
 }
 
-export function createPreviewHandler({ store }) {
+export function createPreviewHandler({ store, config = {} }) {
+  // Optional public staging /p/ gate: cryptographically verify Cloudflare
+  // Access on every private preview request, including assets and redirects.
+  // The share capability URL /s/ is separately protected by its token.
+  const requirePreviewAccess = config.stagingPublicPreview === true;
+  const previewAccess = requirePreviewAccess
+    ? createCloudflareAccessAuth(config)
+    : null;
   async function lookupProjectDir(id) {
     const meta = await store.readRawMeta(id);
 
@@ -388,6 +396,16 @@ export function createPreviewHandler({ store }) {
 
     const id = match[1];
     const rest = match[2];
+
+    // Do not make the UUID an authorization credential when /p is exposed
+    // through the staging hostname. Cloudflare Access at the edge is not
+    // enough: direct-to-origin requests must also fail without a valid JWT.
+    // Return an indistinguishable 404 and never use the admin bearer token
+    // to authorize prototype execution.
+    if (requirePreviewAccess &&
+        !(await previewAccess.authorized(req))) {
+      return notFound(res);
+    }
 
     try {
       const meta = await store.readRawMeta(id);
