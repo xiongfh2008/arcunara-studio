@@ -143,6 +143,73 @@ for `ARCU_PREVIEW_PUBLIC_BASE_URL` is retained.
    separately; never post `.env`, JWT assertion headers, bearer tokens,
    or full share secrets to a public issue.
 
+## RC8: sandboxed iframe + Access cookie regression fix
+
+**Observed issue (2026-11-18):** the outer `/p/{id}/` navigation page
+loads through Access, but sandboxed child iframe requests are redirected
+to `alexxiong2025.cloudflareaccess.com`. The browser blocks the login
+page by the navigation page's `frame-src 'self'` CSP, so the content
+area is blank. A separate blocked Cloudflare Insights beacon script is
+nonessential. This is a third-party-cookie problem in sandboxed frames,
+particularly Chrome Incognito; do not disable the CSP sandbox.
+
+**RC8 mechanism:** The staging workbench remains protected by Access. On
+each Preview click it makes an authenticated **POST**
+`/api/projects/{id}/preview-ticket`. A successful request issues a
+cryptographically random, **ten-minute**, project-scoped capability in
+**server memory only**, then opens `/s/{ticket}/`. The Nginx /s route
+proxies to the existing preview server. Cloudflare MUST exempt **only**
+`staging.arcunara.com/s/*` from Access so embedded pages and all static
+assets can load with **no cookie dependency**. The token stays in every
+relative subresource URL and is validated on every request; disabling
+project preview invalidates it. Tickets are not persisted, survive no
+restart, and never appear in the normal shares list. An issued link is
+a **bearer link**: anyone with the token can view it until expiry.
+
+Safety: no `/p` Access Bypass; no `allow-same-origin`; no wider
+CORS or `script-src`; API never accepts a preview ticket as admin
+authorization; permanent share behavior stays unchanged; valid tokens
+must still be unpredictable and expired/forged tokens return 404.
+
+**Rollout order (after RC7 Nginx /p + /s has been installed and verified):**
+
+1. Keep the current staging Host Access policy. Deploy CI-passed RC8 code,
+   leave existing Nginx routing unchanged. Confirm admin /console and
+   /api still work, eight projects preserved, and unauthenticated /p
+   remains 401 at Nginx / 404 at backend.
+2. On the VPS, exercise the ticket creation endpoint through the private
+   API using the existing bearer token **without printing that bearer
+   token or the issued ticket**, and check a real short-lived token
+   returns 200 on `http://127.0.0.1:28089/s/{token}/`; a wrong
+   token returns 404; a valid static asset returns 200. Confirm no
+   extra record is added in the project's share list.
+3. In Cloudflare Zero Trust > Access controls > Applications, create a
+   separate more-specific Self-hosted app whose **only** target is
+   `staging.arcunara.com/s/*`. Add a Bypass policy with Include:
+   Everyone **for this path only**. Do not alter the original
+   `Arcunara Studio Staging` application's Admin Only policy or
+   any `/p`, `/api` or `/console` paths.
+4. From a clean incognito window (no Access login), GET
+   `/s/invalid-token/` should yield 404 rather than Access 302.
+   Also test /console, /api/projects and /p/{id}/ all still
+   redirect to Access; any private preview JWT-less request to origin
+   remains denied. If these expectations fail, remove /s Bypass
+   immediately. A valid share/token link is intentionally public
+   to token holders.
+5. Log in as admin, click Preview: it should open a ten-minute /s URL,
+   render 12-page Axure navigation, CSS/SVG/fonts, and allow page
+   switching without third-party cookies. Check expiry in a new tab
+   after the ten-minute limit and project disable/enable.
+6. Retain RC7 Nginx defense-in-depth auth_request for /p, and
+   maintain the backend's CSP sandbox for all uploaded content.
+   When in doubt, roll back the Cloudflare /s path exception first,
+   not the core administrator Access policy.
+
+Cloudflare official cookie docs:
+https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/
+Cloudflare path precedence:
+https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/
+
 ## Fail closed / rollback
 
 - If Nginx test fails: restore the saved staging site config and
