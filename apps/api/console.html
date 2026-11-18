@@ -131,6 +131,7 @@ table.versions td:nth-child(7){text-align:right}
 .create-dialog-content{padding:22px 24px 26px}
 .create-dialog-content .field input,.create-dialog-content .field textarea{width:100%;background:#fff;color:var(--text);border:1px solid #dce4f0;border-radius:9px;padding:10px 11px}
 #createStatus:not(:empty){padding:8px 0;color:var(--err);font-size:12px}
+#versionUploadStatus:not(:empty){padding:8px 0;color:var(--err);font-size:12px}
 #cliHint{color:#31466b}
 @media(max-width:1280px){.app-layout{grid-template-columns:210px minmax(0,1fr)}.workspace{padding:22px}.content-grid{grid-template-columns:minmax(0,1.3fr) minmax(330px,1fr);gap:14px}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(140px,1fr) 43px 105px 65px 32px;gap:7px;padding-left:14px;padding-right:14px}.detail-header{padding:20px}}
 @media(max-width:1050px){.content-grid{grid-template-columns:minmax(0,1fr)}.detail-card{max-width:none}.detail-tabs button{font-size:13px;padding:13px 18px}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(180px,1fr) 62px 150px 85px 38px}}
@@ -468,6 +469,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
       </label>
     </div>
     <p class="hint" id="versionUploadQuotaHint">上传限制以服务器实际配额为准。</p>
+    <p id="versionUploadStatus" aria-live="assertive"></p>
     <div class="upload-footer">
       <button type="button" id="cancelVersionUpload" class="ghost">取消</button>
       <button type="button" id="uploadVersionBtn">开始上传</button>
@@ -1244,6 +1246,7 @@ document.querySelectorAll("[data-upload-mode]").forEach(btn => {
 function openVersionDialog() {
   if (!selected) { feedback("请先选择项目", false); return; }
   $("uploadProjectName").textContent = "项目：" + selected.name;
+  $("versionUploadStatus").textContent = "";
   $("versionUploadDialog").showModal();
   setVersionUploadMode("file");
 }
@@ -1440,11 +1443,17 @@ $("uploadVersionBtn").addEventListener("click", async () => {
     $("versionFile").value = "";
     $("versionHtml").value = "";
     $("versionFileName").textContent = "支持 HTML / HTM / ZIP 文件";
+    $("versionUploadStatus").textContent = "";
     $("versionUploadDialog").close();
     await selectProject(selected.id);
     await loadProjects();
   } catch (err) {
-    feedback(`上传失败：${friendlyError(err)}`, false);
+    // Errors must be visible INSIDE the open modal: the page-level feedback
+    // area sits behind the dialog backdrop and cannot be seen while this
+    // dialog is open (verified by the staging acceptance test).
+    const message = `上传失败：${friendlyError(err)}`;
+    feedback(message, false);
+    $("versionUploadStatus").textContent = message;
   } finally {
     uploadingVersion = false;
     setBusy(btn, false);

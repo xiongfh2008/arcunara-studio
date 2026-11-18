@@ -104,7 +104,9 @@ export async function watchDir({
         return;
       }
 
-      log(`检测到内容变化（${sample.fileCount} 个文件，${fmtSize(sample.totalSize)}），开始发布 ...`);
+      log(
+        `检测到内容变化（${sample.stats.fileCount} 个文件，${fmtSize(sample.stats.totalSize)}），开始发布 ...`
+      );
 
       const { view } = await withRetry(
         () =>

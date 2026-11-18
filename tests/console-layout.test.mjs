@@ -47,6 +47,23 @@ test("all in-page scripts compile as JavaScript", () => {
   }
 });
 
+test("version upload failures are reported inside the upload dialog", () => {
+  // Staging acceptance finding: the page-level feedback area is hidden behind
+  // the modal backdrop, so upload errors must also surface in the dialog.
+  assert.match(html, /id="versionUploadStatus"/);
+  assert.match(html, /aria-live="assertive"/);
+  // The catch block writes the friendly error into the dialog element.
+  assert.match(
+    html,
+    /catch \(err\) \{[\s\S]*?versionUploadStatus"\)\.textContent = message;[\s\S]*?\}/
+  );
+  // Dialog open resets any stale error message.
+  assert.match(
+    html,
+    /function openVersionDialog\(\) \{[\s\S]*?versionUploadStatus"\)\.textContent = "";[\s\S]*?showModal\(\)/
+  );
+});
+
 test("focuses the sidebar on projects and places features in selected project cards", () => {
   assert.match(html, /class="app-layout"/);
   assert.match(html, /class="app-sidebar"/);

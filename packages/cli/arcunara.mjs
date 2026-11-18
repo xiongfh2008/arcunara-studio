@@ -348,10 +348,11 @@ async function cmdRollback(argv) {
     strict: true
   });
 
-  const target = Number(positionals[0]);
+  // Accept both "2" and "v2" forms.
+  const target = Number(String(positionals[0] ?? "").replace(/^v/i, ""));
 
   if (!Number.isInteger(target) || target < 1) {
-    die("用法: arcunara rollback <版本号>（例如 arcunara rollback 2）");
+    die("用法: arcunara rollback <版本号>（例如 arcunara rollback 2 或 rollback v2）");
   }
 
   const ctx = resolveContext(values, { needAdmin: true });
