@@ -247,6 +247,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
   // Boolean only: no administrator credential is ever injected into HTML.
   window.__ARCU_LOCAL_AUTO_LOGIN__ = __ARCU_LOCAL_MODE_VALUE__;
   window.__ARCU_ACCESS_AUTO_LOGIN__ = __ARCU_ACCESS_MODE_VALUE__;
+  window.__ARCU_STAGING_PUBLIC_PREVIEW__ = __ARCU_PUBLIC_PREVIEW_MODE_VALUE__;
 </script>
 <header class="shell-header">
   <div class="brand">
@@ -556,6 +557,18 @@ function previewUrlFor(id) {
   return `${previewBase()}/p/${id}/`;
 }
 
+// RC8: A sandboxed iframe cannot reliably send Cloudflare Access cookies,
+// especially in private browsing. The signed-in workbench requests a
+// ten-minute, in-memory capability, then uses /s so iframe assets do not
+// require third-party cookies. A copied ticket is a bearer link: only
+// disclose it to intended viewers; it expires automatically.
+async function usablePreviewUrl(id) {
+  if (!window.__ARCU_STAGING_PUBLIC_PREVIEW__) return previewUrlFor(id);
+  const ticket = await api(`/api/projects/${id}/preview-ticket`, { method: "POST" });
+  return shareUrlFor(ticket.token);
+}
+
+
 // Share links: /s/{shareId}.{secret}/ — the token is part of the path so
 // every subresource request stays protected (relative URLs keep the prefix).
 function shareUrlFor(tokenStr) {
@@ -798,8 +811,14 @@ function renderDetail() {
   $("settingsDesc").textContent = selected.description || "未填写";
   $("settingsDesc").title = selected.description || "未填写";
   $("previewQuickToggle").textContent = selected.previewEnabled === false ? "已停用 · 启用" : "已启用 · 停用";
-  $("summaryPreviewUrl").textContent = selected.previewEnabled === false ? "预览已停用" : previewUrlFor(selected.id);
-  $("summaryPreviewUrl").title = selected.previewEnabled === false ? "" : previewUrlFor(selected.id);
+  $("summaryPreviewUrl").textContent = selected.previewEnabled === false
+    ? "预览已停用"
+    : (window.__ARCU_STAGING_PUBLIC_PREVIEW__
+      ? "点击预览或复制，生成10分钟安全链接"
+      : previewUrlFor(selected.id));
+  $("summaryPreviewUrl").title = selected.previewEnabled === false
+    ? ""
+    : (window.__ARCU_STAGING_PUBLIC_PREVIEW__ ? "短期授权，不写入分享记录" : previewUrlFor(selected.id));
   $("summaryVersion").textContent = "v" + selected.currentVersion;
   $("summaryFiles").textContent = String(selected.fileCount);
   $("summarySize").textContent = fmtBytes(selected.totalSize);
@@ -1521,19 +1540,36 @@ $("copyNewShare").addEventListener("click", () => copyShare($("copyNewShare")));
 $("copyLink").addEventListener("click", async () => {
   if (!selected) return;
   if (selected.previewEnabled === false) { feedback("预览已停用，旧预览链接不可用", false); return; }
-  const url = previewUrlFor(selected.id);
   try {
-    await navigator.clipboard.writeText(url);
-    feedback("预览链接已复制", true);
-  } catch {
-    window.prompt("复制预览链接：", url);
+    const url = await usablePreviewUrl(selected.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      feedback(window.__ARCU_STAGING_PUBLIC_PREVIEW__
+        ? "10分钟安全预览链接已复制" : "预览链接已复制", true);
+    } catch {
+      window.prompt("复制预览链接：", url);
+    }
+  } catch (err) {
+    feedback("获取安全预览链接失败：" + friendlyError(err), false);
   }
 });
 
-$("previewLink").addEventListener("click", (e) => {
-  if (selected && selected.previewEnabled !== false) {
-    e.preventDefault();
-    window.open(previewUrlFor(selected.id), "_blank", "noopener");
+$("previewLink").addEventListener("click", async (e) => {
+  e.preventDefault();
+  if (!selected || selected.previewEnabled === false) return;
+  // Open synchronously in the click gesture to avoid popup blockers.
+  const tab = window.open("about:blank", "_blank");
+  if (tab) tab.opener = null;
+  try {
+    const url = await usablePreviewUrl(selected.id);
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      window.prompt("打开预览链接：", url);
+    }
+  } catch (err) {
+    if (tab) tab.close();
+    feedback("打开预览失败：" + friendlyError(err), false);
   }
 });
 
