@@ -59,6 +59,15 @@ echo "directory, compose file, data and token all present"
 
 step "Git repository state"
 cd "$TARGET_DIR" || fail "cannot cd into $TARGET_DIR"
+# Compose resolves .env relative to its project directory by default (the
+# first -f file lives in infra/docker). Explicitly load the private root
+# .env that operators edit so staging Access SSO is actually passed through.
+# This is optional for test installs that intentionally do not use SSO.
+COMPOSE_ENV_ARGS=()
+if [ -f "$TARGET_DIR/.env" ]; then
+  COMPOSE_ENV_ARGS=(--env-file "$TARGET_DIR/.env")
+  echo "using explicit private root .env for Compose interpolation"
+fi
 BEFORE_GIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 git fetch origin "+refs/heads/main:refs/remotes/origin/main" --tags \
   || git fetch origin "+refs/heads/main:refs/remotes/origin/main" \
@@ -77,7 +86,7 @@ BEFORE_IMAGE_ID="$(docker inspect "$CONTAINER" --format '{{.Image}}')"
 echo "project ok, health ok, current image: $BEFORE_IMAGE_ID"
 
 step "Compose configuration is valid"
-docker compose -f "$COMPOSE_FILE" config -q || fail "docker compose config invalid"
+docker compose "${COMPOSE_ENV_ARGS[@]}" -f "$COMPOSE_FILE" config -q || fail "docker compose config invalid"
 echo "compose config OK"
 
 step "Current services healthy (v0.2.0 must keep working)"
@@ -168,7 +177,7 @@ services:
       context: $BUILD_DIR/src
       dockerfile: infra/docker/Dockerfile
 EOF
-  docker compose -f "$COMPOSE_FILE" -f "$BACKUP_DIR/compose-rollback-override.yaml" up -d --no-deps --no-build api \
+  docker compose "${COMPOSE_ENV_ARGS[@]}" -f "$COMPOSE_FILE" -f "$BACKUP_DIR/compose-rollback-override.yaml" up -d --no-deps --no-build api \
     || { echo "!!!! rollback compose up FAILED — manual intervention required"; exit 2; }
   ROK=""
   for i in $(seq 1 30); do
@@ -196,10 +205,10 @@ services:
       context: $BUILD_DIR/src
       dockerfile: infra/docker/Dockerfile
 EOF
-docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config -q || fail "merged compose config invalid"
+docker compose "${COMPOSE_ENV_ARGS[@]}" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" config -q || fail "merged compose config invalid"
 
 step "Replace only the pinned test container"
-docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --no-deps --no-build api \
+docker compose "${COMPOSE_ENV_ARGS[@]}" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d --no-deps --no-build api \
   || rollback "compose up -d failed"
 
 step "Wait for container health"
