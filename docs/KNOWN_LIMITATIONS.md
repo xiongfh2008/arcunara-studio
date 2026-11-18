@@ -109,6 +109,21 @@
 - 已用真实 Chromium（ZCode 内置浏览器）完成端到端人工验证：CSS 实际生效（computed style）、图片实际解码（naturalWidth）、按钮脚本交互、页面导航、工作台连接。
 - **仓库内未包含 Playwright 自动化浏览器测试**（未安装 Playwright 依赖与浏览器二进制）；CI 目前只运行 lint + 集成测试。这是后续待办，不是已完成项。
 
+## RC7 单公网测试域名预览实验（尚未启用）
+
+RC7 增加了**默认关闭**的 `ARCU_STAGING_PUBLIC_PREVIEW` 开关，可在
+`staging.arcunara.com` 下通过不同路径提供管理员预览（`/p/`）和
+带时效的令牌分享（`/s/`），省去管理员浏览器本地 SSH 隧道。
+但它**不是独立网络 Origin**：安全性依赖每个预览文档的 opaque-origin
+CSP 沙箱、每次 `/p` 请求的签名 Access JWT 认证、Nginx 的二级鉴权
+和仅针对 `/s/*` 的最小范围公开策略。旧版本回滚若保留不受保护的
+公网 `/p` 路由可能泄露 UUID 预览，因此部署与回滚有严格顺序。
+
+该方案限定为**单管理员 staging 试点**，不能替代本文“公网部署前”
+对**正式多租户生产环境**独立预览网络 Origin 的要求。原生 Axure
+播放器的 localStorage、XHR、eval 限制不会因使用同一公网主机而消失。
+具体步骤与风险：`docs/STAGING_PUBLIC_PREVIEW.md`。
+
 ## 公网部署前必须解决
 
 1. 预览服务独立域名/源（绝对要求，见上文）。

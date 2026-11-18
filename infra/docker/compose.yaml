@@ -51,6 +51,10 @@ services:
       - "ARCU_ACCESS_ADMIN_EMAIL=${ARCU_ACCESS_ADMIN_EMAIL:-}"
       - "ARCU_ACCESS_ORIGIN=${ARCU_ACCESS_ORIGIN:-}"
 
+      # Staging-only public preview gateway: default OFF until Nginx and
+      # Cloudflare path-specific policies have been safely configured.
+      - "ARCU_STAGING_PUBLIC_PREVIEW=${ARCU_STAGING_PUBLIC_PREVIEW:-0}"
+
       # Internal test-env quotas, sized for real Axure RP11 exports
       # (2,786 entries / 4.6 MiB max HTML / 72.6 MiB total — see
       # docs/KNOWN_LIMITATIONS.md). Production-safe defaults live in

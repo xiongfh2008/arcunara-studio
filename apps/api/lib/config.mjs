@@ -136,6 +136,26 @@ export function loadConfig(env = process.env) {
     };
   }
 
+  // Explicit staging-only, single-public-host preview gateway.
+  // /p/ requires a *signed* Cloudflare Access JWT, while /s/ continues
+  // to require a per-share secret.  Disabled unless explicitly enabled.
+  // The browser's opaque-origin CSP sandbox remains mandatory.
+  const publicPreviewFlag = env.ARCU_STAGING_PUBLIC_PREVIEW || "0";
+  if (publicPreviewFlag !== "0" && publicPreviewFlag !== "1") {
+    throw new Error("ARCU_STAGING_PUBLIC_PREVIEW must be 0 or 1");
+  }
+  const stagingPublicPreview = publicPreviewFlag === "1";
+  const previewPublicBaseUrl = previewPublicBaseUrlFromEnv(env);
+  if (stagingPublicPreview && (
+    !cloudflareAccess ||
+    previewPublicBaseUrl !== cloudflareAccess.origin ||
+    localAutoLogin
+  )) {
+    throw new Error(
+      "ARCU_STAGING_PUBLIC_PREVIEW requires Cloudflare Access and a preview base matching its HTTPS origin"
+    );
+  }
+
   // Larger, previously tested Axure-export profile for explicitly enabled
   // loopback-only development. The normal production defaults stay strict.
   // Explicit ARCU_MAX_* overrides always take precedence.
@@ -159,6 +179,7 @@ export function loadConfig(env = process.env) {
 
   return {
     cloudflareAccess,
+    stagingPublicPreview,
     localAutoLogin,
     store: env.ARCU_DATA_DIR || "/app/data",
     token,
@@ -167,7 +188,7 @@ export function loadConfig(env = process.env) {
     apiHost,
     previewPort: portFromEnv(env, "ARCU_PREVIEW_PORT", 3001),
     previewHost,
-    previewPublicBaseUrl: previewPublicBaseUrlFromEnv(env),
+    previewPublicBaseUrl,
     limits
   };
 }

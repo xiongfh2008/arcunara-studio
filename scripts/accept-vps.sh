@@ -4,6 +4,9 @@
 set -uo pipefail
 API="http://127.0.0.1:28088"; PREVIEW="http://127.0.0.1:28089"
 TOKEN="$(tr -d '[:space:]' < /opt/arcunara-studio-v03-test/infra/docker/secrets/api_token)"
+# RC7 mode requires every /p request without a signed JWT to fail closed.
+PUBLIC_PREVIEW_GATE="$(docker exec arcunara-studio-api-v03-test node -e 'process.stdout.write(process.env.ARCU_STAGING_PUBLIC_PREVIEW === "1" ? "1" : "0")')"
+echo "RC7 staging public preview gate: $PUBLIC_PREVIEW_GATE"
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; exit 1; }
 
@@ -70,7 +73,7 @@ fi
 apijson "$API/api/projects" | python3 -c '
 import json,sys,urllib.request
 projects = json.load(sys.stdin)["projects"]
-accept_pid = sys.argv[1]
+accept_pid, public_gate = sys.argv[1], sys.argv[2] == "1"
 found_nav = 0
 reachable = 0
 for p in projects:
@@ -79,6 +82,8 @@ for p in projects:
     url = "http://127.0.0.1:28089/p/" + p["id"] + "/"
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
+            if public_gate:
+                raise AssertionError("unsigned /p must be 404, got 200: " + p["id"])
             html = r.read().decode("utf-8", "replace")
             reachable += 1
             if "页面目录" in html or "安全预览" in html:
@@ -86,17 +91,23 @@ for p in projects:
                 assert "输入页面名称" in html, "RC4 page search missing"
                 assert "桌面 1440" in html and "手机 390" in html, "RC4 width presets missing"
     except urllib.error.HTTPError as e:
-        if e.code not in (200, 404):
+        if public_gate:
+            assert e.code == 404, "unsigned /p must 404: %s -> %s" % (p["id"], e.code)
+        elif e.code not in (200, 404):
             raise
-print("PASS: RC4 nav/search/width verified on %d Axure project(s), %d project(s) reachable" % (found_nav, reachable))
-' "$PID"
+print("PASS: RC4 checks on %d Axure project(s), %d project(s) reachable; public gate=%s" % (found_nav, reachable, public_gate))
+' "$PID" "$PUBLIC_PREVIEW_GATE"
 [ $? -eq 0 ] || bad "RC4 feature check failed"
 
 # --- /p bypass check for disabled preview on the acceptance project ---
 apijson -X PATCH -H 'Content-Type: application/json' -d '{"previewEnabled":false}' "$API/api/projects/$PID" > /dev/null
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW/p/$PID/")" = "404" ] || bad "disabled /p still accessible"
 apijson -X PATCH -H 'Content-Type: application/json' -d '{"previewEnabled":true}' "$API/api/projects/$PID" > /dev/null
-[ "$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW/p/$PID/")" = "200" ] || bad "/p re-enable failed"
+if [ "$PUBLIC_PREVIEW_GATE" = "1" ]; then
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW/p/$PID/")" = "404" ] || bad "public /p allowed unsigned request"
+else
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW/p/$PID/")" = "200" ] || bad "/p re-enable failed"
+fi
 ok "/p preview gate verified server-side"
 
 echo "ALL ONLINE ACCEPTANCE CHECKS PASSED (isolated project $PID remains in list — no delete API by design)"

@@ -236,12 +236,15 @@ AFTER_COUNT="$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1])
 [ "$AFTER_COUNT" = "$BEFORE_COUNT" ] || rollback "project count changed: $BEFORE_COUNT -> $AFTER_COUNT"
 echo "projects preserved: $AFTER_COUNT"
 
-# RC5 API wiring + per-project read-only preview checks (enabled -> 200,
-# disabled -> 404) on the CURRENT version entry.
-python3 - "$BACKUP_DIR/projects-after.json" "$PREVIEW" "$API" "$TOKEN" <<'PYEOF' || rollback "preview/API checks failed (see log)"
+# RC7: without a JWT, all private /p requests MUST be denied whenever
+# public staging preview mode is on. Else preserve the original RC5 checks.
+PUBLIC_PREVIEW_MODE="$(docker exec "$CONTAINER" node -e 'process.stdout.write(process.env.ARCU_STAGING_PUBLIC_PREVIEW === "1" ? "1" : "0")')"
+echo "staging public preview gate: $PUBLIC_PREVIEW_MODE"
+python3 - "$BACKUP_DIR/projects-after.json" "$PREVIEW" "$API" "$TOKEN" "$PUBLIC_PREVIEW_MODE" <<'PYEOF' || rollback "preview/API checks failed (see log)"
 import json, sys, urllib.request
 
 projects, preview_base, api_base, token = json.load(open(sys.argv[1]))["projects"], sys.argv[2], sys.argv[3], sys.argv[4]
+public_gate = sys.argv[5] == "1"
 
 def get(url, auth=False):
     req = urllib.request.Request(url)
@@ -266,7 +269,11 @@ for p in projects:
     st, _ = get(f"{api_base}/api/projects/{pid}/shares", auth=True)
     assert st == 200, f"shares list {pid}: {st}"
     st, _ = get(f"{preview_base}/p/{pid}/")
-    if detail.get("previewEnabled", True):
+    if public_gate:
+        assert st == 404, f"private public-gateway preview must reject no JWT ({pid}): {st}"
+        st, _ = get(f"{preview_base}/p/{pid}/index.html")
+        assert st == 404, f"private public-gateway asset must reject no JWT ({pid}): {st}"
+    elif detail.get("previewEnabled", True):
         assert st == 200, f"preview of enabled project {pid}: {st}"
     else:
         assert st == 404, f"disabled project {pid} preview must 404, got {st}"
