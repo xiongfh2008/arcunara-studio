@@ -246,6 +246,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
   window.__PREVIEW_BASE__ = __ARCU_PREVIEW_BASE__;
   // Boolean only: no administrator credential is ever injected into HTML.
   window.__ARCU_LOCAL_AUTO_LOGIN__ = __ARCU_LOCAL_MODE_VALUE__;
+  window.__ARCU_ACCESS_AUTO_LOGIN__ = __ARCU_ACCESS_MODE_VALUE__;
 </script>
 <header class="shell-header">
   <div class="brand">
@@ -258,7 +259,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
 <div class="tokenbar" id="tokenbar">
   <input type="password" id="tokenInput" placeholder="粘贴 API Token（仅保存在内存中，刷新即失效）" autocomplete="off">
   <button id="saveToken">连接</button>
-  <span class="hint">手动 Token 只保存在当前页面内存；仅本地自动模式使用独立的 HttpOnly 临时会话 Cookie。</span>
+  <span class="hint">本地开发使用独立临时 Cookie；启用 Cloudflare Access 后由服务器验证登录身份。手动 Token 不保存在浏览器存储中。</span>
 </div>
 
 <div id="feedback" class="hidden" role="status" aria-live="polite"></div>
@@ -598,9 +599,12 @@ function api(path, options = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   // The local HttpOnly cookie is sent automatically on same-origin fetches.
   // A non-simple header and browser Origin check protect write requests.
-  if (window.__ARCU_LOCAL_AUTO_LOGIN__ && !token &&
-      !["GET", "HEAD"].includes((options.method || "GET").toUpperCase())) {
-    headers["X-Arcunara-Local-Request"] = "1";
+  if (!token && !["GET", "HEAD"].includes((options.method || "GET").toUpperCase())) {
+    if (window.__ARCU_LOCAL_AUTO_LOGIN__) {
+      headers["X-Arcunara-Local-Request"] = "1";
+    } else if (window.__ARCU_ACCESS_AUTO_LOGIN__) {
+      headers["X-Arcunara-Access-Request"] = "1";
+    }
   }
   return fetch(path, { ...options, headers }).then(async (res) => {
     let json = null;
@@ -673,7 +677,8 @@ function setBusy(btn, busy, busyLabel) {
 function setAuthorized(ok) {
   isAuthorized = Boolean(ok);
   $("authBadge").textContent = ok
-    ? (window.__ARCU_LOCAL_AUTO_LOGIN__ && !token ? "本地已连接" : "已连接")
+    ? (window.__ARCU_LOCAL_AUTO_LOGIN__ && !token ? "本地已连接" :
+      window.__ARCU_ACCESS_AUTO_LOGIN__ && !token ? "Access 已连接" : "已连接")
     : "连接 API";
   $("authBadge").style.color = ok ? "var(--ok)" : "var(--muted)";
   $("tokenbar").classList.toggle("collapsed", ok);
@@ -1535,7 +1540,7 @@ $("previewLink").addEventListener("click", (e) => {
 // Local development: the server has just set an HttpOnly, SameSite=Strict
 // cookie while serving /console. Fetches use it without showing a login
 // prompt or putting the administrator API token into page source/storage.
-if (window.__ARCU_LOCAL_AUTO_LOGIN__) {
+if (window.__ARCU_LOCAL_AUTO_LOGIN__ || window.__ARCU_ACCESS_AUTO_LOGIN__) {
   $("tokenbar").classList.add("collapsed");
   $("connectionToggle").classList.add("hidden");
   (async () => {
@@ -1549,7 +1554,7 @@ if (window.__ARCU_LOCAL_AUTO_LOGIN__) {
       // Fail closed. Manual bearer-token connection remains available.
       $("connectionToggle").classList.remove("hidden");
       setAuthorized(false);
-      feedback("本地自动连接失败，请检查服务配置：" + friendlyError(err), false);
+      feedback("自动连接失败，请检查 Access 身份或服务配置：" + friendlyError(err), false);
     }
   })();
 }
