@@ -9,6 +9,7 @@ import { createAuth } from "./lib/auth.mjs";
 import { createStore } from "./lib/store.mjs";
 import { createApiHandler } from "./lib/routes.mjs";
 import { createPreviewHandler } from "./lib/preview.mjs";
+import { createPreviewTickets } from "./lib/preview-tickets.mjs";
 
 const VERSION = "0.3.0";
 
@@ -28,12 +29,13 @@ try {
 const auth = createAuth(config.token);
 const store = createStore(config);
 await store.init();
+const previewTickets = createPreviewTickets();
 
 const api = http.createServer(
-  createApiHandler({ config, store, auth, version: VERSION, getPreviewPort: () => getPreviewPort() })
+  createApiHandler({ config, store, auth, previewTickets, version: VERSION, getPreviewPort: () => getPreviewPort() })
 );
 
-const preview = http.createServer(createPreviewHandler({ store, config }));
+const preview = http.createServer(createPreviewHandler({ store, config, previewTickets }));
 
 api.listen(config.apiPort, config.apiHost, () => {
   console.log(`Arcunara API v0.3 started on port ${api.address().port}`);

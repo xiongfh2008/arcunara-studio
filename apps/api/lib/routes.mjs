@@ -21,6 +21,7 @@ const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
+const PREVIEW_TICKET_RE = new RegExp(`^/api/projects/${PROJECT_ID}/preview-ticket$`);
 const SHARE_ACTION_RE = new RegExp(
   `^/api/projects/${PROJECT_ID}/shares/([0-9a-f]{16})/(revoke|enable|disable)$`
 );
@@ -50,7 +51,7 @@ function deployKeyAllowed(method, pathname, projectId) {
   );
 }
 
-export function createApiHandler({ config, store, auth, version, getPreviewPort }) {
+export function createApiHandler({ config, store, auth, previewTickets, version, getPreviewPort }) {
   // Only an explicitly enabled loopback development instance may issue a
   // short-lived browser cookie. The admin bearer token is never exposed.
   const localSession = createLocalSession(config);
@@ -85,7 +86,8 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
       .replace("__ARCU_PREVIEW_PORT__", String(previewPort))
       .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl))
       .replace("__ARCU_LOCAL_MODE_VALUE__", String(localSession.eligible(req)))
-      .replace("__ARCU_ACCESS_MODE_VALUE__", String(cloudflareAccess.enabled));
+      .replace("__ARCU_ACCESS_MODE_VALUE__", String(cloudflareAccess.enabled))
+      .replace("__ARCU_PUBLIC_PREVIEW_MODE_VALUE__", String(config.stagingPublicPreview === true));
 
     const localCookie = localSession.issueCookie(req);
     res.writeHead(200, {
@@ -253,6 +255,21 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
           const view = await store.updateProject(id, patch);
           return sendJson(res, 200, view);
         }
+      }
+
+      // Only an authenticated administrator can create a ten-minute
+      // project-scoped browser capability. Deploy keys cannot access it.
+      const ticketMatch = PREVIEW_TICKET_RE.exec(pathname);
+      if (ticketMatch && req.method === "POST") {
+        if (!config.stagingPublicPreview || !previewTickets) {
+          return sendJson(res, 404, { error: "Not Found" });
+        }
+        const meta = await store.readRawMeta(ticketMatch[1]);
+        if (!meta || meta.previewEnabled === false) {
+          return sendJson(res, 404, { error: "Not Found" });
+        }
+        const ticket = previewTickets.issue(ticketMatch[1]);
+        return sendJson(res, 201, ticket);
       }
 
       const sharesMatch = SHARES_RE.exec(pathname);

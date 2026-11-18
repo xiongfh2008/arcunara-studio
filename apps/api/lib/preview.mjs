@@ -146,7 +146,7 @@ function decodeSegment(raw) {
   return segment;
 }
 
-export function createPreviewHandler({ store, config = {} }) {
+export function createPreviewHandler({ store, config = {}, previewTickets = null }) {
   // Optional public staging /p/ gate: cryptographically verify Cloudflare
   // Access on every private preview request, including assets and redirects.
   // The share capability URL /s/ is separately protected by its token.
@@ -324,6 +324,26 @@ export function createPreviewHandler({ store, config = {} }) {
     if (!rest) {
       // Bare token — normalize to the trailing-slash share URL.
       return redirect(res, `${basePath}/`);
+    }
+
+    // RC8: administrator-issued short-lived tickets use the same /s URL
+    // shape as shares, but live only in process memory (no persistent share
+    // records / no stats). The Cloudflare edge allows /s by path; each
+    // resource must still prove its bearer capability here.
+    const ephemeral = config.stagingPublicPreview && previewTickets
+      ? previewTickets.validate(shareId, secret)
+      : null;
+    if (ephemeral) {
+      try {
+        const meta = await store.readRawMeta(ephemeral.projectId);
+        if (!meta || meta.previewEnabled === false) return notFound(res);
+        return await serveProjectPath(
+          res, ephemeral.projectId, basePath, rest, { headOnly }
+        );
+      } catch (err) {
+        console.error("Temporary preview error:", err?.message ?? err);
+        return notFound(res);
+      }
     }
 
     let verdict;
