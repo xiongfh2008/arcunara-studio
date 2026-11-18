@@ -37,9 +37,11 @@ The Docker Compose test stack passes these variables into the application.
 Deploy a CI-verified commit using the existing isolated deployment script,
 which takes backups, pins the image, runs acceptance and rolls back its own
 container on failure. Do not touch the legacy Arcunara container or other
-services. The script runs from the repository root so its private root
-`.env` will be used for Compose interpolation. Verify the merged Compose
-configuration **without printing environment values**.
+services. The deployment script explicitly passes the private root `.env` through
+`docker compose --env-file` because its primary Compose file lives under
+`infra/docker/`. Verify the merged Compose configuration **without printing
+environment values**. Running `docker compose config -q` alone does not prove
+these variables reached the container.
 
 After deployment, a valid logged-in browser will load `/api/limits` and
 `/api/projects` without pasting a bearer Token. API requests with an
