@@ -14,6 +14,7 @@ import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
+import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
@@ -53,6 +54,7 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
   // Only an explicitly enabled loopback development instance may issue a
   // short-lived browser cookie. The admin bearer token is never exposed.
   const localSession = createLocalSession(config);
+  const cloudflareAccess = createCloudflareAccessAuth(config);
   // The internal workbench is static, contains no credentials and remains
   // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
@@ -82,7 +84,8 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
     const html = consoleHtml
       .replace("__ARCU_PREVIEW_PORT__", String(previewPort))
       .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl))
-      .replace("__ARCU_LOCAL_MODE_VALUE__", String(localSession.eligible(req)));
+      .replace("__ARCU_LOCAL_MODE_VALUE__", String(localSession.eligible(req)))
+      .replace("__ARCU_ACCESS_MODE_VALUE__", String(cloudflareAccess.enabled));
 
     const localCookie = localSession.issueCookie(req);
     res.writeHead(200, {
@@ -162,7 +165,8 @@ export function createApiHandler({ config, store, auth, version, getPreviewPort 
         req.deployKey = { projectId: verdict.projectId, keyId: verdict.key.id };
       } else if (
         !pathname.startsWith("/api/") ||
-        (!auth(req) && !localSession.authorized(req))
+        (!auth(req) && !localSession.authorized(req) &&
+          !(await cloudflareAccess.authorized(req)))
       ) {
         return sendJson(res, 401, { error: "Unauthorized" });
       }
