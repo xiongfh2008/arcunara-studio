@@ -74,8 +74,22 @@ for `ARCU_PREVIEW_PUBLIC_BASE_URL` is retained.
    existing 443 `server { }` for `staging.arcunara.com` (adapt to
    existing include structure; do not add a new server or proxy port):
    ```nginx
+   # Defense-in-depth at the Nginx ingress: this keeps /p private even if
+   # someone rolls the preview service back to older code without its gate.
+   # Requires nginx's standard auth_request module.
+   location = /__arcunara_preview_access_check {
+       internal;
+       proxy_pass http://127.0.0.1:28088/api/limits;
+       proxy_pass_request_body off;
+       proxy_set_header Content-Length "";
+       proxy_set_header Host staging.arcunara.com;
+       proxy_set_header Authorization "";
+       proxy_set_header Cookie "";
+       proxy_set_header Cf-Access-Jwt-Assertion $http_cf_access_jwt_assertion;
+   }
    location ^~ /p/ {
        limit_except GET HEAD { deny all; }
+       auth_request /__arcunara_preview_access_check;
        proxy_pass http://127.0.0.1:28089;
        proxy_set_header Host staging.arcunara.com;
        proxy_set_header X-Forwarded-Proto https;
@@ -102,7 +116,11 @@ for `ARCU_PREVIEW_PUBLIC_BASE_URL` is retained.
    Keep the existing default `location /` to API :28088 unchanged.
    `sudo nginx -t` must succeed before `sudo systemctl reload nginx`.
    Existing site shared configuration and default virtual hosts are NOT
-   touched. Neither upstream port becomes public on the firewall.
+   touched. Neither upstream port becomes public on the firewall. The
+   `auth_request` subrequest must be verified with a real Cloudflare
+   session before creating the /s bypass rule. Cloudflare /p failure
+   should remain Access 302; direct-to-origin without JWT must be
+   rejected by the backend and the Nginx auth subrequest.
 5. With the existing hostname-wide Access policy *still active*, validate
    an unauthenticated `/console`, `/api/projects`, and `/p/uuid/` all
    redirect to Access (typically 302). A signed-in admin must get a real
@@ -129,13 +147,16 @@ for `ARCU_PREVIEW_PUBLIC_BASE_URL` is retained.
 
 - If Nginx test fails: restore the saved staging site config and
   `nginx -t && systemctl reload nginx`; do not touch unrelated sites.
-- If a public route behaves unexpectedly: **remove the two new /p/
-  and /s/ Nginx locations first**, then reload, then disable/revert the
-  `/s/*` Bypass application. This restores private SSH preview.
-- For an app-only rollback, set `ARCU_STAGING_PUBLIC_PREVIEW=0`
-  and remove the custom preview base, then redeploy the verified prior
-  image as provided by deploy script backup. **Never disable auth with
-  the /p/ public route still active**: doing so exposes UUID previews.
+- If a public route behaves unexpectedly: **remove the new /p/, /s/
+  and internal auth-request Nginx locations first**, then reload, then
+  disable/revert the `/s/*` Bypass application. This restores private
+  SSH preview.
+- On application rollback, the Nginx `auth_request` remains a
+  separate signed-JWT barrier. Nevertheless, safest procedure is to
+  first remove the /p/ and /s/ Nginx routes, then set
+  `ARCU_STAGING_PUBLIC_PREVIEW=0`, remove the custom preview base and
+  deploy the prior image. **Never leave a /p/ public route without
+  both the signed-JWT Nginx auth gate and a validated app gate.**
 - Do not assume an HTTP 302 alone proves origin security; signed JWT
   verification must also pass/fail as expected.
 
