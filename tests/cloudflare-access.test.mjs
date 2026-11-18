@@ -109,8 +109,12 @@ test("Cloudflare Access is disabled by default and configurations must be comple
       /Invalid Cloudflare Access/);
     assert.throws(() => loadConfig({ ...env, ARCU_ACCESS_ISSUER: "https://malicious.example" }),
       /Invalid Cloudflare Access/);
-    assert.throws(() => loadConfig({ ...env, ARCU_LOCAL_AUTO_LOGIN: "1" }),
-      /cannot both be enabled/);
+    assert.throws(() => loadConfig({
+      ...env,
+      ARCU_LOCAL_AUTO_LOGIN: "1",
+      ARCU_API_HOST: "127.0.0.1",
+      ARCU_PREVIEW_HOST: "127.0.0.1"
+    }), /cannot both be enabled/);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
