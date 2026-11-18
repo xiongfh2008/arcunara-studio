@@ -88,7 +88,7 @@ for `ARCU_PREVIEW_PUBLIC_BASE_URL` is retained.
        proxy_set_header Cf-Access-Jwt-Assertion $http_cf_access_jwt_assertion;
    }
    location ^~ /p/ {
-       limit_except GET HEAD { deny all; }
+       limit_except GET { deny all; }
        auth_request /__arcunara_preview_access_check;
        proxy_pass http://127.0.0.1:28089;
        proxy_set_header Host staging.arcunara.com;
@@ -101,7 +101,7 @@ for `ARCU_PREVIEW_PUBLIC_BASE_URL` is retained.
        add_header Cache-Control "no-store" always;
    }
    location ^~ /s/ {
-       limit_except GET HEAD { deny all; }
+       limit_except GET { deny all; }
        proxy_pass http://127.0.0.1:28089;
        proxy_set_header Host staging.arcunara.com;
        proxy_set_header X-Forwarded-Proto https;
