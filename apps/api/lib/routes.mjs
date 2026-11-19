@@ -21,6 +21,7 @@ const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
+const VERSION_NOTE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions/([0-9]+)$`);
 const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
 const PREVIEW_TICKET_RE = new RegExp(`^/api/projects/${PROJECT_ID}/preview-ticket$`);
@@ -211,6 +212,15 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           const result = await store.listVersions(id);
           return sendJson(res, 200, result);
         }
+      }
+
+      const versionNoteMatch = VERSION_NOTE_RE.exec(pathname);
+      if (versionNoteMatch && req.method === "PATCH") {
+        const payload = await readJsonPayload(req, config.limits);
+        const result = await store.updateVersionNote(
+          versionNoteMatch[1], Number(versionNoteMatch[2]), payload.note
+        );
+        return sendJson(res, 200, result);
       }
 
       const rollbackMatch = ROLLBACK_RE.exec(pathname);
