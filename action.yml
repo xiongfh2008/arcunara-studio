@@ -1,0 +1,45 @@
+name: "Arcunara Static Publish"
+description: "Publish an existing local static build directory to an authorized Arcunara Studio project"
+branding:
+  icon: upload-cloud
+  color: blue
+inputs:
+  api-base:
+    description: "HTTPS Arcunara API base URL"
+    required: true
+  project-id:
+    description: "Target Arcunara project UUID"
+    required: true
+  deploy-key:
+    description: "Project-scoped deploy key (configure as a GitHub Actions Secret)"
+    required: true
+  output-dir:
+    description: "Prebuilt static site directory (e.g. dist)"
+    required: false
+    default: dist
+  preview-base:
+    description: "Optional public browser-facing preview URL"
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Set up Node 24
+      uses: actions/setup-node@v4
+      with:
+        node-version: "24"
+    - name: Publish static assets (no server code executed)
+      shell: bash
+      env:
+        ARCU_DEPLOY_KEY: ${{ inputs.deploy-key }}
+        ARCU_API_BASE: ${{ inputs.api-base }}
+        ARCU_PREVIEW_BASE: ${{ inputs.preview-base }}
+        ARCU_PROJECT_ID: ${{ inputs.project-id }}
+        ARCU_OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/packages/cli/arcunara.mjs" publish \
+          --skip-build \
+          --api "$ARCU_API_BASE" \
+          --project "$ARCU_PROJECT_ID" \
+          --dir "$ARCU_OUTPUT_DIR"

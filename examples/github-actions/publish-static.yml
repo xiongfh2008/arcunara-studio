@@ -1,0 +1,32 @@
+# Copy this example into your WEBSITE repository at .github/workflows/publish.yml
+# and configure repository secrets. Do not copy it into Arcunara itself:
+# build scripts execute untrusted code; use your own trusted site repository.
+name: Publish static website to Arcunara
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: arcunara-site-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Publish to Arcunara
+        uses: xiongfh2008/arcunara-studio@main # pin a reviewed commit SHA before production use
+        with:
+          api-base: ${{ secrets.ARCU_API_BASE }}
+          project-id: ${{ secrets.ARCU_PROJECT_ID }}
+          deploy-key: ${{ secrets.ARCU_DEPLOY_KEY }}
+          output-dir: dist
+          preview-base: ${{ vars.ARCU_PREVIEW_BASE }}

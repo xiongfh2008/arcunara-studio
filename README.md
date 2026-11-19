@@ -2,7 +2,10 @@
 
 面向全球用户的 AI 原型转换与托管 SaaS：HTML/ZIP 原型一键托管、更新与分享；后续支持 HTML → Axure RP11 原生 `.rp` 转换、CLI 与各 AI 工具 Skill。
 
-- **v0.3.0（RC4 预览体验开发中）**：HTML/ZIP 托管、版本回滚、Axure 多页面安全导航、页面搜索与画布宽度切换（桌面/平板/手机）。
+- **RC10（本地静态发布开发）**：`arcunara publish` 自动构建并发布 dist/build/out 静态网站，提供 AI Agent Skill 和 GitHub Actions 组合动作；公网独立网站运行环境尚未发布。
+- **RC9（工作台改版）**：统一浅色 SaaS UI、移动端布局，项目归档、可恢复回收站及权限保护。
+- **RC8（已开发，待部署验收）**：Cloudflare iframe 跨站 Cookie 问题的十分钟临时预览能力。
+- **v0.3.0（RC4–RC7）**：HTML/ZIP 托管、版本回滚、Axure 多页面安全导航、页面搜索、画布宽度切换及 CLI/分享/部署密钥。
 - **v0.2.0**：已在 VPS Docker 环境完成真实 HTTP 验收的托管基线（`legacy-v02/` 冻结保存）。
 - **后续规划**：HTML → `.rp` 转换（`packages/rp-converter`）、用户系统与访问控制、CLI / Codex / Cursor / Trae Skill、浏览器插件。
 
@@ -88,6 +91,7 @@ npm run lint    # node --check 全部 .mjs
 - [docs/deployment.md](docs/deployment.md) — 部署、验收、回滚（含 v0.2.0 兼容性说明）
 - [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — 已知限制与安全边界（公网部署前必读）
 - [docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md) — 按阶段的开发进度
+- [docs/AI_ONE_CLICK_PUBLISH.md](docs/AI_ONE_CLICK_PUBLISH.md) — AI 一键静态发布、Skill 和 GitHub Action 示例
 
 ## v0.3.0 之后计划（尚未实现）
 
