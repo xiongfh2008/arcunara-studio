@@ -30,7 +30,7 @@ const BASE_HEADERS = Object.freeze({
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
-  "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+  "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; worker-src 'none'",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Cross-Origin-Resource-Policy": "same-origin"
 });
