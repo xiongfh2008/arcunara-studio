@@ -235,7 +235,8 @@ export function createStore(config) {
         fileCount: 1,
         totalSize,
         entryPoint: "index.html",
-        storage: "legacy-root"
+        storage: "legacy-root",
+        note: meta.legacyVersionNote ?? ""
       };
     }
 
@@ -510,9 +511,39 @@ export function createStore(config) {
           fileCount: v.fileCount,
           totalSize: v.totalSize,
           entryPoint: v.entryPoint,
+          note: v.note ?? "",
           isCurrent: v.version === (meta.currentVersion ?? versions[versions.length - 1].version)
         }))
     };
+  }
+
+  // A short, user-editable release note. Never mutates version files or
+  // currentVersion; also supports legacy v0.2 projects via meta-only field.
+  async function updateVersionNote(id, version, note) {
+    if (!Number.isSafeInteger(version) || version < 1) {
+      throw new ApiError(400, "Invalid version", "INVALID_VERSION");
+    }
+    if (typeof note !== "string" || note.length > 500) {
+      throw new ApiError(400, "Version note must be a string of at most 500 characters", "INVALID_VERSION_NOTE");
+    }
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+      if (!meta) throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      if (meta.lifecycleState === "trashed") {
+        throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
+      }
+      if (isLegacy(meta)) {
+        if (version !== 1) throw new ApiError(404, "Version not found", "VERSION_NOT_FOUND");
+        meta.legacyVersionNote = note.trim();
+      } else {
+        const entry = meta.versions.find(v => v.version === version);
+        if (!entry) throw new ApiError(404, "Version not found", "VERSION_NOT_FOUND");
+        entry.note = note.trim();
+      }
+      meta.updatedAt = now();
+      await writeMetaAtomic(id, meta);
+      return { projectId:id, version, note:note.trim() };
+    });
   }
 
   async function rollback(id, targetVersion) {
@@ -1123,6 +1154,7 @@ export function createStore(config) {
     createProject,
     addVersion,
     listVersions,
+    updateVersionNote,
     rollback,
     updateProject,
     createShare,
