@@ -264,6 +264,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
   window.__ARCU_LOCAL_AUTO_LOGIN__ = __ARCU_LOCAL_MODE_VALUE__;
   window.__ARCU_ACCESS_AUTO_LOGIN__ = __ARCU_ACCESS_MODE_VALUE__;
   window.__ARCU_STAGING_PUBLIC_PREVIEW__ = __ARCU_PUBLIC_PREVIEW_MODE_VALUE__;
+  window.__ARCU_SITE_DOMAIN__ = __ARCU_SITE_DOMAIN_VALUE__;
 </script>
 <header class="shell-header">
   <div class="brand">
@@ -338,6 +339,12 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
             <div><span>分享访问次数</span><strong id="shareVisitCount">0</strong></div>
           </div>
           <p class="inspector-note" id="shareOverviewNote">尚未创建分享链接</p>
+        </section>
+        <section class="card inspector-section" aria-label="正式网站发布">
+          <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 正式网站发布</h3><span id="siteHostingState" class="status-chip off">未发布</span></div>
+          <div class="inspector-keyline"><span>独立站点链接</span><a id="siteHostingUrl" href="" target="_blank" rel="noopener noreferrer" style="overflow-wrap:anywhere;font-size:12px">未发布</a></div>
+          <p id="siteHostingHint" class="hint">静态网站独立域名托管与原型预览分离；需要管理员明确发布。</p>
+          <button type="button" id="siteHostingToggle" class="ghost">发布静态网站</button>
         </section>
         <section class="card inspector-section">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 自动部署</h3><button type="button" id="openDeployPanel" class="small-link">配置部署 ›</button></div>
@@ -845,6 +852,17 @@ function renderDetail() {
   $("settingsName").title = selected.name;
   $("settingsDesc").textContent = selected.description || "未填写";
   $("settingsDesc").title = selected.description || "未填写";
+  const siteAvailable = Boolean(window.__ARCU_SITE_DOMAIN__);
+  const sitePublished = siteAvailable && selected.siteEnabled === true;
+  $("siteHostingState").textContent = sitePublished ? "已发布" : "未发布";
+  $("siteHostingState").classList.toggle("off", !sitePublished);
+  $("siteHostingUrl").textContent = sitePublished ? selected.siteUrl : "未发布";
+  $("siteHostingUrl").href = sitePublished ? selected.siteUrl : "";
+  $("siteHostingToggle").disabled = !siteAvailable || selected.lifecycleState === "trashed";
+  $("siteHostingToggle").textContent = sitePublished ? "停止发布" : "发布静态网站";
+  $("siteHostingHint").textContent = siteAvailable
+    ? "当前项目使用独立子域名。网站 JS 可运行；发布会向持有地址的访客公开内容。停止发布后立即返回 404。"
+    : "尚未配置独立站点运行域名；预览功能保持不变。";
   const lc = selected.lifecycleState || "active";
   const lcNames = { active: "进行中", archived: "已归档", trashed: "回收站" };
   $("lifecycleCurrent").textContent = "项目状态：" + (lcNames[lc] || lc);
@@ -1380,6 +1398,30 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 
 $("projectSearch").addEventListener("input", renderProjects);
+
+$("siteHostingToggle").addEventListener("click", async () => {
+  if (!selected || !window.__ARCU_SITE_DOMAIN__) return;
+  const publish = selected.siteEnabled !== true;
+  if (!window.confirm(publish
+    ? "确定公开发布此静态网站？页面及其资源可被任何持有链接的访客访问，并在独立子域名运行 JS。"
+    : "确定停止网站发布？现有公开网站链接将立即返回 404。")) return;
+  const btn = $("siteHostingToggle");
+  setBusy(btn, true, publish ? "发布中…" : "停止中…");
+  try {
+    const id = selected.id;
+    await api(`/api/projects/${id}`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ siteEnabled: publish })
+    });
+    await selectProject(id);
+    await loadProjects();
+    feedback(publish ? "静态网站已发布（需独立域名路由才可公网访问）" : "静态网站已停止发布", true);
+  } catch (err) {
+    feedback("网站发布状态更新失败：" + friendlyError(err), false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
 
 $("analyzeAxureBtn").addEventListener("click", async () => {
   if (!selected) return;
