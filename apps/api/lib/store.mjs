@@ -635,14 +635,6 @@ export function createStore(config) {
     });
   }
 
-  // A trashed project is not writable by CLI or shareable, and may be
-  // restored without losing versions or previously configured shares.
-  function requireNotTrashed(meta) {
-    if (meta.lifecycleState === "trashed") {
-      throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
-    }
-  }
-
   // ---- RC5 share management ---------------------------------------------
 
   function shareView(s) {
