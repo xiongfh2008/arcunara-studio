@@ -222,6 +222,22 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
 @media (max-width:1250px){.app-layout{grid-template-columns:190px minmax(0,1fr)}.workspace{padding:24px 18px}.content-grid{grid-template-columns:minmax(0,1fr)}.project-inspector{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.project-inspector>.detail-card{grid-row:span 2}.inspector-bottom{grid-column:1/-1}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(180px,1fr) 85px 75px 138px 80px}}
 @media (max-width:700px){.app-layout{display:block}.app-sidebar{border-right:0;border-bottom:1px solid var(--border);padding:8px 12px}.app-sidebar nav{display:flex}.app-sidebar .sidebar-bottom{display:none}.workspace{padding:16px}.project-top-actions{flex-wrap:wrap}.project-top-actions .search{flex:1 0 100%}.project-inspector{grid-template-columns:1fr}.project-inspector>.detail-card{grid-row:auto}.inspector-bottom{grid-column:auto;grid-template-columns:1fr}.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(120px,1fr) 55px 70px;gap:6px;padding:10px}.project-table-head span:nth-child(2),.project-table-head span:nth-child(4),ul.projects li.project-row .project-type,ul.projects li.project-row .project-date{display:none}.project-table-head span:nth-child(3){display:block}.project-table-head span:nth-child(5){display:block}.project-top-actions .workspace-actions{width:100%;display:flex}.project-top-actions .workspace-actions button{flex:1}.manage-dialog .detail-panel{padding:12px}}
 
+/* RC9: unified light SaaS surface system; responsive project operations. */
+:root{--bg:#f6f8fc;--panel:#fff;--panel2:#f8faff;--border:#e3e9f3;--text:#0f172a;--muted:#66758b;--accent:#2563eb;--accent2:#1d4ed8;--radius:14px}
+.shell-header{height:68px;padding:0 30px;box-shadow:0 1px 0 #e9edf5}
+.app-layout{grid-template-columns:224px minmax(0,1fr);min-height:calc(100vh - 68px)}
+.app-sidebar{background:#fff;padding:24px 12px;border-color:#e7ecf4}
+.workspace{padding:28px clamp(18px,2.5vw,44px) 50px;max-width:1820px}
+.card{border-radius:14px;box-shadow:0 2px 16px rgba(15,23,42,.035)}
+.side-nav{border-radius:9px}
+.side-nav[aria-current="page"]{background:#e8efff}
+.workspace-header h1{font-size:27px}
+.project-top-actions{gap:14px;flex-wrap:wrap}
+.project-filter{padding:9px 11px;max-width:150px;border-radius:9px;border:1px solid #dce4f0;background:#fff;color:#34435c;min-height:39px}
+.lifecycle-actions{border-top:1px solid var(--border);margin-top:18px;padding-top:15px;display:flex;gap:8px;flex-wrap:wrap}
+.lifecycle-state{font-size:12px;color:var(--muted);margin:8px 0}
+@media(max-width:960px){.app-layout{grid-template-columns:66px minmax(0,1fr)}.side-nav{font-size:0;justify-content:center;padding:12px}.sidebar-bottom{display:none}.app-sidebar{padding:18px 8px}.project-filter{max-width:none}}
+@media(max-width:600px){.app-layout{grid-template-columns:minmax(0,1fr)}.app-sidebar{display:none}.workspace{padding:18px 12px}.shell-header{padding:0 14px}.project-top-actions{display:flex;flex-direction:column;align-items:stretch}.project-top-actions .workspace-actions{width:100%}.project-top-actions input.search,.project-filter{width:100%;max-width:100%}.content-grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -283,7 +299,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
             <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
             <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
           </div>
-          <input type="search" id="projectSearch" class="search" placeholder="搜索项目名称 / ID" aria-label="搜索项目名称或 ID" autocomplete="off">
+          <div class="row" style="justify-content:flex-end"><input type="search" id="projectSearch" class="search" placeholder="搜索项目名称 / ID" aria-label="搜索项目名称或 ID" autocomplete="off"><select id="lifecycleFilter" class="project-filter" aria-label="项目筛选"><option value="active">进行中</option><option value="archived">已归档</option><option value="trashed">回收站</option><option value="all">全部项目</option></select></div>
         </div>
         <section class="card project-list-card" aria-label="我的项目">
           <div class="list-toolbar">
@@ -437,6 +453,9 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
       <button id="togglePreviewBtn" class="warn">停用预览</button>
     </div>
     <p class="hint">停用预览后，旧预览地址 /p/{id}/ 的页面与全部静态资源都会被服务端拒绝（404）；已创建的分享链接不受影响，可在分享管理中单独撤销或停用。</p>
+    <p class="lifecycle-state" id="lifecycleCurrent">项目状态：进行中</p>
+    <div class="lifecycle-actions"><button type="button" id="archiveProjectBtn" class="ghost">归档项目</button><button type="button" id="trashProjectBtn" class="danger">移入回收站</button><button type="button" id="restoreProjectBtn" class="ghost">恢复项目</button></div>
+    <p class="hint">回收站为可恢复的软删除：不会物理删除版本文件；回收站项目的预览、分享、临时预览与部署会被拒绝。归档仅用于工作台整理。</p>
 
 
       <details class="details-fold">
@@ -726,7 +745,10 @@ function renderProjects() {
   const list = $("projectList");
   list.textContent = "";
   const query = $("projectSearch").value;
-  const visible = projects.filter((p) => projectMatches(p, query));
+  const lifecycle = $("lifecycleFilter").value;
+  const visible = projects.filter((p) =>
+    projectMatches(p, query) && (lifecycle === "all" || (p.lifecycleState || "active") === lifecycle)
+  );
   $("projectCount").textContent = visible.length + " 个项目";
 
   if (!visible.length) {
@@ -810,6 +832,12 @@ function renderDetail() {
   $("settingsName").title = selected.name;
   $("settingsDesc").textContent = selected.description || "未填写";
   $("settingsDesc").title = selected.description || "未填写";
+  const lc = selected.lifecycleState || "active";
+  const lcNames = { active: "进行中", archived: "已归档", trashed: "回收站" };
+  $("lifecycleCurrent").textContent = "项目状态：" + (lcNames[lc] || lc);
+  $("archiveProjectBtn").classList.toggle("hidden", lc !== "active");
+  $("trashProjectBtn").classList.toggle("hidden", lc === "trashed");
+  $("restoreProjectBtn").classList.toggle("hidden", lc === "active");
   $("previewQuickToggle").textContent = selected.previewEnabled === false ? "已停用 · 启用" : "已启用 · 停用";
   $("summaryPreviewUrl").textContent = selected.previewEnabled === false
     ? "预览已停用"
@@ -1335,6 +1363,29 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 
 $("projectSearch").addEventListener("input", renderProjects);
+$("lifecycleFilter").addEventListener("change", renderProjects);
+
+async function changeLifecycle(state) {
+  if (!selected) { feedback("请先选择项目", false); return; }
+  const question = state === "trashed"
+    ? "移入回收站会立即阻止项目预览、分享和部署，但不会删除版本文件。确定继续？"
+    : state === "archived" ? "将项目归档？已发布的内容不会改变。" : "恢复该项目为进行中？";
+  if (!window.confirm(question)) return;
+  const id = selected.id;
+  try {
+    await api(`/api/projects/${id}`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lifecycleState: state })
+    });
+    $("lifecycleFilter").value = state;
+    await loadProjects();
+    await selectProject(id);
+    feedback(state === "trashed" ? "已移入回收站，可随时恢复" : state === "archived" ? "项目已归档" : "项目已恢复", true);
+  } catch (err) { feedback("项目状态更新失败：" + friendlyError(err), false); }
+}
+$("archiveProjectBtn").addEventListener("click", () => changeLifecycle("archived"));
+$("trashProjectBtn").addEventListener("click", () => changeLifecycle("trashed"));
+$("restoreProjectBtn").addEventListener("click", () => changeLifecycle("active"));
 
 $("createBtn").addEventListener("click", async () => {
   const btn = $("createBtn");
@@ -1372,6 +1423,7 @@ $("createBtn").addEventListener("click", async () => {
     }
 
     feedback(`项目已创建：${created.previewPath}`, true);
+    $("lifecycleFilter").value = "active";
     $("newName").value = ""; $("newDesc").value = ""; $("newHtml").value = ""; $("newFile").value = "";
     await loadProjects();
     await selectProject(created.id);
