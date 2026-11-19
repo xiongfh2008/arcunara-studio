@@ -270,6 +270,7 @@ export function createStore(config) {
       // RC5: absent flag means enabled (v0.2.0/v0.3.0-RC4 compatibility —
       // existing projects never lose their open preview behavior).
       previewEnabled: meta.previewEnabled !== false && meta.lifecycleState !== "trashed",
+      siteEnabled: meta.siteEnabled === true && meta.lifecycleState !== "trashed",
       lifecycleState: meta.lifecycleState || "active",
       archivedAt: meta.archivedAt ?? null,
       trashedAt: meta.trashedAt ?? null
@@ -643,8 +644,21 @@ export function createStore(config) {
           throw new ApiError(400, "Invalid lifecycle state", "INVALID_LIFECYCLE_STATE");
         }
         meta.lifecycleState = patch.lifecycleState;
+        if (patch.lifecycleState === "trashed") meta.siteEnabled = false;
         meta.archivedAt = patch.lifecycleState === "archived" ? now() : null;
         meta.trashedAt = patch.lifecycleState === "trashed" ? now() : null;
+      }
+
+      // Static site publication is an EXPLICIT administrator operation.
+      // Preview and permanent-share settings remain independent.
+      if (patch.siteEnabled !== undefined) {
+        if (typeof patch.siteEnabled !== "boolean") {
+          throw new ApiError(400, "siteEnabled must be a boolean", "INVALID_SITE_ENABLED");
+        }
+        if (meta.lifecycleState === "trashed" && patch.siteEnabled) {
+          throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
+        }
+        meta.siteEnabled = patch.siteEnabled;
       }
 
       if (patch.previewEnabled !== undefined) {

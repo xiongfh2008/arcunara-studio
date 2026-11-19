@@ -156,6 +156,30 @@ export function loadConfig(env = process.env) {
     );
   }
 
+  // RC13: independent public static-site listener. Explicitly opt in and
+  // route each project through a distinct UUID subdomain. Never reuse the
+  // platform/admin/preview hostname, even though sites are public content.
+  // No DNS, nginx, Cloudflare, or Docker port is automatically changed.
+  const siteFlag = env.ARCU_SITE_HOSTING_ENABLED || "0";
+  if (!["0","1"].includes(siteFlag)) {
+    throw new Error("ARCU_SITE_HOSTING_ENABLED must be 0 or 1");
+  }
+  const siteHostingEnabled = siteFlag === "1";
+  const siteDomain = (env.ARCU_SITE_DOMAIN || "").trim().toLowerCase();
+  if (siteHostingEnabled) {
+    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]{2,63}$/.test(siteDomain)) {
+      throw new Error("ARCU_SITE_DOMAIN requires a valid dedicated DNS suffix");
+    }
+    const adminHost = cloudflareAccess?.host ?? null;
+    const previewHostName = previewPublicBaseUrl
+      ? new URL(previewPublicBaseUrl).hostname : null;
+    if (siteDomain === adminHost || siteDomain === previewHostName ||
+        (adminHost && adminHost.endsWith("." + siteDomain)) ||
+        (previewHostName && previewHostName.endsWith("." + siteDomain))) {
+      throw new Error("Static site domain must be separate from the admin and preview origins");
+    }
+  }
+
   // Larger, previously tested Axure-export profile for explicitly enabled
   // loopback-only development. The normal production defaults stay strict.
   // Explicit ARCU_MAX_* overrides always take precedence.
@@ -180,6 +204,10 @@ export function loadConfig(env = process.env) {
   return {
     cloudflareAccess,
     stagingPublicPreview,
+    siteHostingEnabled,
+    siteDomain: siteHostingEnabled ? siteDomain : null,
+    sitePort: portFromEnv(env, "ARCU_SITE_PORT", 3002),
+    siteHost: env.ARCU_SITE_HOST || "127.0.0.1",
     localAutoLogin,
     store: env.ARCU_DATA_DIR || "/app/data",
     token,

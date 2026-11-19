@@ -4,6 +4,7 @@
 // VPS data, production ports, or any persisted state outside the temp dir.
 
 import { spawn } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -33,6 +34,8 @@ export async function startServer(envOverrides = {}) {
       ARCU_PREVIEW_PORT: "0",
       // Never inherit a developer's opt-in localhost browser session during tests.
       ARCU_LOCAL_AUTO_LOGIN: "0",
+      ARCU_SITE_HOSTING_ENABLED: "0",
+      ARCU_SITE_DOMAIN: "",
       // Keep Cloudflare staging SSO out of unrelated integration tests.
       ARCU_ACCESS_ISSUER: "",
       ARCU_ACCESS_AUDIENCE: "",
@@ -59,10 +62,13 @@ export async function startServer(envOverrides = {}) {
   while (Date.now() < deadline) {
     const apiMatch = stdout.match(/API v0\.\d+ started on port (\d+)/);
     const previewMatch = stdout.match(/Preview v0\.\d+ started on port (\d+)/);
+    const siteMatch = stdout.match(/Arcunara Sites v0\.3 started on port (\d+)/);
 
-    if (apiMatch && previewMatch) {
+    if (apiMatch && previewMatch &&
+        (envOverrides.ARCU_SITE_HOSTING_ENABLED !== "1" || siteMatch)) {
       const apiBase = `http://127.0.0.1:${apiMatch[1]}`;
       const previewBase = `http://127.0.0.1:${previewMatch[1]}`;
+      const siteBase = siteMatch ? `http://127.0.0.1:${siteMatch[1]}` : null;
 
       // JSON API helper. token: null sends no Authorization header.
       async function api(pathname, { method = "GET", token: tok = token, headers = {}, body } = {}) {
@@ -91,9 +97,36 @@ export async function startServer(envOverrides = {}) {
         tokenFile,
         apiBase,
         previewBase,
+        siteBase,
         api,
         preview(pathname, options = {}) {
           return fetch(`${previewBase}${pathname}`, options);
+        },
+        site(projectId, pathname, options = {}) {
+          if (!siteBase) throw new Error("Static site listener is disabled");
+          // Node's fetch() forcibly rewrites Host to 127.0.0.1 (Undici).
+          // Use a raw HTTP client to exercise production virtual-host routing.
+          return new Promise((resolve, reject) => {
+            const req = httpRequest(siteBase + pathname, {
+              method: options.method || "GET",
+              headers: {
+                ...options.headers,
+                Host: `${projectId}.${envOverrides.ARCU_SITE_DOMAIN}`
+              }
+            }, (res) => {
+              const chunks = [];
+              res.on("data", (chunk) => chunks.push(chunk));
+              res.on("end", () => {
+                resolve(new Response(Buffer.concat(chunks), {
+                  status: res.statusCode,
+                  headers: res.headers
+                }));
+              });
+              res.on("error", reject);
+            });
+            req.on("error", reject);
+            req.end(options.body);
+          });
         },
         async stop() {
           if (child.exitCode !== null || child.signalCode !== null) return;
