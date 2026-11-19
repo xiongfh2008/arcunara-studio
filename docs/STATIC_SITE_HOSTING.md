@@ -32,7 +32,7 @@ RC13 将业务能力完全分开：
 - 仅读取 ZIP/HTML 经现有上传安全检查后落盘的静态文件。
   禁止 dotfiles、meta.json、符号链接、路径穿越、未允许扩展名。
 - 返回基础安全头：`nosniff`、`frame-ancestors 'none'`、
-  `object-src 'none'`、有限的 Permissions-Policy。
+  `object-src 'none'`、`worker-src 'none'`（避免停用后被持久化 Service Worker 绕过）及有限的 Permissions-Policy。
 - API `PATCH /api/projects/{id}` 接受管理员布尔字段
   `siteEnabled`；部署密钥仍只允许上传版本和查询，无权发布。
   `GET /api/projects/{id}` 在已发布时返回 `siteUrl`。
