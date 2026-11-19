@@ -3,6 +3,7 @@
 面向全球用户的 AI 原型转换与托管 SaaS：HTML/ZIP 原型一键托管、更新与分享；后续支持 HTML → Axure RP11 原生 `.rp` 转换、CLI 与各 AI 工具 Skill。
 
 - **RC13（独立静态网站运行服务）**：默认关闭的第三个 Listener；按项目 UUID 独立域名发布 HTML/CSS/JS，支持前端路由、管理员发布/停止和静态资源保护；未部署公网。
+- **RC14（GitHub 自动部署自助向导）**：工作台生成、复制和下载 GitHub Actions YAML，Action 固定版本，部署密钥仅引用 Secrets；不需要网站服务器执行 GitHub OAuth。
 - **RC11（Axure 可编辑导出前置分析）**：按版本扫描页面/控件/脚本风险，工作台可查看 JSON 转换评估；原生 `.rp` 编译尚待接入 Zee-RP。
 - **RC10（本地静态发布开发）**：`arcunara publish` 自动构建并发布 dist/build/out 静态网站，提供 AI Agent Skill 和 GitHub Actions 组合动作；公网独立网站运行环境尚未发布。
 - **RC9（工作台改版）**：统一浅色 SaaS UI、移动端布局，项目归档、可恢复回收站及权限保护。
@@ -94,6 +95,7 @@ npm run lint    # node --check 全部 .mjs
 - [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — 已知限制与安全边界（公网部署前必读）
 - [docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md) — 按阶段的开发进度
 - [docs/AI_ONE_CLICK_PUBLISH.md](docs/AI_ONE_CLICK_PUBLISH.md) — AI 一键静态发布、Skill 和 GitHub Action 示例
+- [docs/GITHUB_DEPLOY_WIZARD.md](docs/GITHUB_DEPLOY_WIZARD.md) — GitHub 自动部署向导与 Secrets 配置说明
 - [docs/AXURE_CONVERSION.md](docs/AXURE_CONVERSION.md) — Axure 逐版本转换评估与原生 .rp 导出要求
 - [docs/STATIC_SITE_HOSTING.md](docs/STATIC_SITE_HOSTING.md) — 独立静态站点运行环境、安全边界和验收标准
 
