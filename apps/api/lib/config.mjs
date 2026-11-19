@@ -167,7 +167,7 @@ export function loadConfig(env = process.env) {
   const siteHostingEnabled = siteFlag === "1";
   const siteDomain = (env.ARCU_SITE_DOMAIN || "").trim().toLowerCase();
   if (siteHostingEnabled) {
-    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/.test(siteDomain)) {
+    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]{2,63}$/.test(siteDomain)) {
       throw new Error("ARCU_SITE_DOMAIN requires a valid dedicated DNS suffix");
     }
     const adminHost = cloudflareAccess?.host ?? null;
