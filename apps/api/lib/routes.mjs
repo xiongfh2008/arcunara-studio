@@ -90,7 +90,8 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl))
       .replace("__ARCU_LOCAL_MODE_VALUE__", String(localSession.eligible(req)))
       .replace("__ARCU_ACCESS_MODE_VALUE__", String(cloudflareAccess.enabled))
-      .replace("__ARCU_PUBLIC_PREVIEW_MODE_VALUE__", String(config.stagingPublicPreview === true));
+      .replace("__ARCU_PUBLIC_PREVIEW_MODE_VALUE__", String(config.stagingPublicPreview === true))
+      .replace("__ARCU_SITE_DOMAIN_VALUE__", JSON.stringify(config.siteHostingEnabled ? config.siteDomain : null));
 
     const localCookie = localSession.issueCookie(req);
     res.writeHead(200, {
@@ -261,6 +262,8 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
             view.isAxure = false;
           }
 
+          view.siteUrl = config.siteHostingEnabled && view.siteEnabled
+            ? `https://${id}.${config.siteDomain}/` : null;
           return sendJson(res, 200, view);
         }
 
@@ -270,12 +273,15 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           const payload = await readJsonPayload(req, config.limits);
           const patch = {};
 
-          for (const key of ["name", "description", "previewEnabled", "lifecycleState"]) {
+          for (const key of ["name", "description", "previewEnabled", "lifecycleState", "siteEnabled"]) {
             if (payload[key] !== undefined) {
               patch[key] = payload[key];
             }
           }
 
+          if (patch.siteEnabled === true && !config.siteHostingEnabled) {
+            throw new ApiError(409, "Static website hosting is not enabled", "SITE_HOSTING_DISABLED");
+          }
           const view = await store.updateProject(id, patch);
           return sendJson(res, 200, view);
         }
