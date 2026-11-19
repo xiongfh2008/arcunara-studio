@@ -35,7 +35,7 @@ const RISK_RULES = [
     "发现嵌入框架；需要改写为原生页面或说明不支持"],
   ["STORAGE_API", /\b(?:localStorage|sessionStorage|indexedDB)\b/i,
     "发现浏览器本地存储依赖，不能直接原生映射"],
-  ["NETWORK_API", /\b(?:fetch\s*\(|XMLHttpRequest|WebSocket)\b/i,
+  ["NETWORK_API", /\b(?:fetch\s*\(|XMLHttpRequest\b|WebSocket\b)/i,
     "发现网络数据依赖，需独立处理接口和数据绑定"]
 ];
 
