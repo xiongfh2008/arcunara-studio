@@ -64,6 +64,7 @@ test("RC13 static website is published only on its isolated UUID host, with norm
     assert.match(await html.text(),/AI website/);
     assert.doesNotMatch(html.headers.get("content-security-policy")??"",/sandbox/);
     assert.match(html.headers.get("content-security-policy")??"",/frame-ancestors 'none'/);
+    assert.match(html.headers.get("content-security-policy")??"",/worker-src 'none'/);
     assert.equal(html.headers.get("set-cookie"),null);
     const js=await server.site(id,"/assets/app.js");
     assert.equal(js.status,200);
@@ -99,6 +100,8 @@ test("RC13 static website is published only on its isolated UUID host, with norm
     assert.equal((await server.preview(`/p/${id}/`)).status,200,"preview gate independent of publication");
     await patch(server,id,{siteEnabled:true});
     assert.equal((await server.site(id,"/")).status,200);
+    assert.equal((await patch(server,id,{lifecycleState:"archived"})).status,200);
+    assert.equal((await server.site(id,"/")).status,200,"archiving does not unpublish a public website");
     assert.equal((await patch(server,id,{lifecycleState:"trashed"})).status,200);
     assert.equal((await server.site(id,"/")).status,404);
     await patch(server,id,{lifecycleState:"active"});
