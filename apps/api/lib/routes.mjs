@@ -12,12 +12,14 @@ import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
 import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
+import { analyzeAxureReadiness } from "./axure-readiness.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
+const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
@@ -215,6 +217,18 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
 
       if (rollbackMatch && req.method === "POST") {
         return await handleRollback(req, res, { config, store, id: rollbackMatch[1] });
+      }
+
+      // Read-only export readiness report; no untrusted uploaded code is executed.
+      const readinessMatch = AXURE_READINESS_RE.exec(pathname);
+      if (readinessMatch && req.method === "GET") {
+        const query = new URL(req.url || "/", "http://localhost").searchParams;
+        const rawVersion = query.get("version");
+        if (rawVersion !== null && !/^[1-9][0-9]*$/.test(rawVersion)) {
+          throw new ApiError(400, "Invalid version", "INVALID_VERSION");
+        }
+        const version = rawVersion === null ? undefined : Number(rawVersion);
+        return sendJson(res, 200, await analyzeAxureReadiness(store, readinessMatch[1], version));
       }
 
       const detailMatch = DETAIL_RE.exec(pathname);
