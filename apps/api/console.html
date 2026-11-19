@@ -447,6 +447,24 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
     </div>
     <p class="hint">CLI 用法（在本项目目录执行）：</p>
     <pre id="cliHint" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:12px; white-space:pre-wrap; word-break:break-all;"></pre>
+    <section class="details-fold" aria-label="GitHub 自动部署向导">
+      <h4 style="margin:0 0 8px">GitHub Actions 自动部署</h4>
+      <p class="hint">生成可直接放入网站仓库的 GitHub 工作流文件。需在网站仓库 Secrets 中设置 ARCU_API_BASE 和 ARCU_DEPLOY_KEY；不会自动关联 GitHub，也不会把密钥写入文件。</p>
+      <div class="row">
+        <label class="field" style="margin:0"><span>静态输出目录</span>
+          <select id="githubOutputDir"><option value="dist">dist</option><option value="build">build</option><option value="out">out</option><option value="public">public</option></select>
+        </label>
+        <label class="field" style="margin:0"><span>构建方式</span>
+          <select id="githubBuildMode"><option value="npm">npm ci + npm run build</option><option value="none">已有静态产物（跳过构建）</option></select>
+        </label>
+        <button type="button" id="generateGithubWorkflow" class="ghost">生成工作流</button>
+      </div>
+      <div id="githubWorkflowResult" class="hidden" style="margin-top:12px">
+        <p class="hint">将下载的文件放到网站仓库 <code>.github/workflows/arcunara-deploy.yml</code>；添加 Secrets 后由你自行提交启用。</p>
+        <pre id="githubWorkflowYaml" style="max-height:260px;overflow:auto;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>
+        <div class="row"><button type="button" id="downloadGithubWorkflow" class="ghost">下载 YAML 文件</button><button type="button" id="copyGithubWorkflow" class="ghost">复制 YAML</button></div>
+      </div>
+    </section>
     <p id="noDeployKeys" class="hint">当前没有部署密钥</p>
     <div class="table-scroll"><table class="shares" id="deployKeyTable">
       <thead><tr><th>密钥 ID</th><th>状态</th><th>创建时间</th><th>过期时间</th><th>最近使用</th><th>最近部署版本</th><th>最近部署结果</th><th>操作</th></tr></thead>
@@ -815,6 +833,8 @@ function renderProjects() {
 async function selectProject(id) {
   try {
     selected = await api(`/api/projects/${id}`);
+    generatedGithubWorkflow = null;
+    $("githubWorkflowResult").classList.add("hidden");
     versions = (await api(`/api/projects/${id}/versions`)).versions;
     shares = (await api(`/api/projects/${id}/shares`)).shares;
     deployKeys = (await api(`/api/projects/${id}/deploy-keys`)).deployKeys;
@@ -1380,6 +1400,49 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 
 $("projectSearch").addEventListener("input", renderProjects);
+let generatedGithubWorkflow = null;
+$("generateGithubWorkflow").addEventListener("click", async () => {
+  if (!selected) { feedback("请先选择项目", false); return; }
+  const btn = $("generateGithubWorkflow");
+  setBusy(btn, true, "生成中…");
+  try {
+    const params = new URLSearchParams({
+      outputDir: $("githubOutputDir").value,
+      buildMode: $("githubBuildMode").value
+    });
+    generatedGithubWorkflow = await api(`/api/projects/${selected.id}/github-workflow?${params}`);
+    $("githubWorkflowYaml").textContent = generatedGithubWorkflow.content;
+    $("githubWorkflowResult").classList.remove("hidden");
+    feedback("工作流已生成，请下载并添加网站仓库 Secrets", true);
+  } catch (err) {
+    generatedGithubWorkflow = null;
+    $("githubWorkflowResult").classList.add("hidden");
+    feedback("生成失败：" + friendlyError(err), false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+$("copyGithubWorkflow").addEventListener("click", async () => {
+  if (!generatedGithubWorkflow) return;
+  try {
+    await navigator.clipboard.writeText(generatedGithubWorkflow.content);
+    feedback("YAML 已复制（不包含任何真实密钥）", true);
+  } catch {
+    feedback("复制失败，请手动选择 YAML 内容", false);
+  }
+});
+$("downloadGithubWorkflow").addEventListener("click", () => {
+  if (!generatedGithubWorkflow) return;
+  const blob = new Blob([generatedGithubWorkflow.content], { type: "application/yaml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = generatedGithubWorkflow.fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+});
 
 $("analyzeAxureBtn").addEventListener("click", async () => {
   if (!selected) return;
