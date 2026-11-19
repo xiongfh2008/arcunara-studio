@@ -95,7 +95,8 @@ export function createSiteHandler({ store, config }) {
   if (!config.siteHostingEnabled || !config.siteDomain) {
     throw new Error("Static sites listener requires explicit hosting configuration");
   }
-  const hosts = new RegExp(`^(${UUID})\\.${config.siteDomain.replace(/[.*+?^${}()|[\\]\\]/g,"\\$&")}(?::[0-9]{1,5})?$`);
+  // Config validates the suffix to DNS labels, so only dots need escaping.
+  const hosts = new RegExp(`^(${UUID})\\.${config.siteDomain.replaceAll(".", "\\.")}(?::[0-9]{1,5})?$`);
   return async function site(req,res) {
     const method = req.method;
     if (method !== "GET" && method !== "HEAD") return notFound(res);
