@@ -4,6 +4,7 @@
 // VPS data, production ports, or any persisted state outside the temp dir.
 
 import { spawn } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -103,12 +104,28 @@ export async function startServer(envOverrides = {}) {
         },
         site(projectId, pathname, options = {}) {
           if (!siteBase) throw new Error("Static site listener is disabled");
-          return fetch(`${siteBase}${pathname}`, {
-            ...options,
-            headers: {
-              ...options.headers,
-              host: `${projectId}.${envOverrides.ARCU_SITE_DOMAIN}`
-            }
+          // Node's fetch() forcibly rewrites Host to 127.0.0.1 (Undici).
+          // Use a raw HTTP client to exercise production virtual-host routing.
+          return new Promise((resolve, reject) => {
+            const req = httpRequest(siteBase + pathname, {
+              method: options.method || "GET",
+              headers: {
+                ...options.headers,
+                Host: `${projectId}.${envOverrides.ARCU_SITE_DOMAIN}`
+              }
+            }, (res) => {
+              const chunks = [];
+              res.on("data", (chunk) => chunks.push(chunk));
+              res.on("end", () => {
+                resolve(new Response(Buffer.concat(chunks), {
+                  status: res.statusCode,
+                  headers: res.headers
+                }));
+              });
+              res.on("error", reject);
+            });
+            req.on("error", reject);
+            req.end(options.body);
           });
         },
         async stop() {
