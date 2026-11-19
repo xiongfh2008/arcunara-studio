@@ -2,6 +2,7 @@
 
 面向全球用户的 AI 原型转换与托管 SaaS：HTML/ZIP 原型一键托管、更新与分享；后续支持 HTML → Axure RP11 原生 `.rp` 转换、CLI 与各 AI 工具 Skill。
 
+- **RC14（GitHub 自动部署自助向导）**：工作台生成并下载安全的 GitHub Actions YAML，固定 Action 提交、使用项目级密钥占位符；未连接真实 GitHub 仓库。
 - **RC11（Axure 可编辑导出前置分析）**：按版本扫描页面/控件/脚本风险，工作台可查看 JSON 转换评估；原生 `.rp` 编译尚待接入 Zee-RP。
 - **RC10（本地静态发布开发）**：`arcunara publish` 自动构建并发布 dist/build/out 静态网站，提供 AI Agent Skill 和 GitHub Actions 组合动作；公网独立网站运行环境尚未发布。
 - **RC9（工作台改版）**：统一浅色 SaaS UI、移动端布局，项目归档、可恢复回收站及权限保护。
@@ -93,6 +94,7 @@ npm run lint    # node --check 全部 .mjs
 - [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — 已知限制与安全边界（公网部署前必读）
 - [docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md) — 按阶段的开发进度
 - [docs/AI_ONE_CLICK_PUBLISH.md](docs/AI_ONE_CLICK_PUBLISH.md) — AI 一键静态发布、Skill 和 GitHub Action 示例
+- [docs/GITHUB_DEPLOY_WIZARD.md](docs/GITHUB_DEPLOY_WIZARD.md) — GitHub 自动部署配置向导、安全凭据和启用说明
 - [docs/AXURE_CONVERSION.md](docs/AXURE_CONVERSION.md) — Axure 逐版本转换评估与原生 .rp 导出要求
 
 ## v0.3.0 之后计划（尚未实现）
