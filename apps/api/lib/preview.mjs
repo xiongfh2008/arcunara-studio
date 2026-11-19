@@ -250,6 +250,8 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
   // current version directory for `id`, serves the Axure nav page or the
   // requested file. All path-safety rules are identical on both routes.
   async function serveProjectPath(res, id, basePath, rest, { headOnly = false } = {}) {
+    const lifecycleMeta = await store.readRawMeta(id);
+    if (!lifecycleMeta || lifecycleMeta.lifecycleState === "trashed") return notFound(res);
     const dir = await lookupProjectDir(id);
 
     if (!dir) {
@@ -336,7 +338,7 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
     if (ephemeral) {
       try {
         const meta = await store.readRawMeta(ephemeral.projectId);
-        if (!meta || meta.previewEnabled === false) return notFound(res);
+        if (!meta || meta.previewEnabled === false || meta.lifecycleState === "trashed") return notFound(res);
         return await serveProjectPath(
           res, ephemeral.projectId, basePath, rest, { headOnly }
         );

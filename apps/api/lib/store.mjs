@@ -268,7 +268,10 @@ export function createStore(config) {
       totalSize: entry.totalSize,
       // RC5: absent flag means enabled (v0.2.0/v0.3.0-RC4 compatibility —
       // existing projects never lose their open preview behavior).
-      previewEnabled: meta.previewEnabled !== false
+      previewEnabled: meta.previewEnabled !== false && meta.lifecycleState !== "trashed",
+      lifecycleState: meta.lifecycleState || "active",
+      archivedAt: meta.archivedAt ?? null,
+      trashedAt: meta.trashedAt ?? null
     };
 
     if (meta.description !== undefined) {
@@ -391,6 +394,9 @@ export function createStore(config) {
   async function addVersion(id, { stagedDir, stats, contentHash }) {
     return withLock(id, async () => {
       const meta = await readRawMeta(id);
+      if (meta?.lifecycleState === "trashed") {
+        throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
+      }
 
       if (!meta) {
         throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
@@ -599,6 +605,17 @@ export function createStore(config) {
         }
       }
 
+      // Archive and trash are metadata-only; never delete user files or
+      // invalidate the version tree. Restoring a project preserves history.
+      if (patch.lifecycleState !== undefined) {
+        if (!["active", "archived", "trashed"].includes(patch.lifecycleState)) {
+          throw new ApiError(400, "Invalid lifecycle state", "INVALID_LIFECYCLE_STATE");
+        }
+        meta.lifecycleState = patch.lifecycleState;
+        meta.archivedAt = patch.lifecycleState === "archived" ? now() : null;
+        meta.trashedAt = patch.lifecycleState === "trashed" ? now() : null;
+      }
+
       if (patch.previewEnabled !== undefined) {
         if (typeof patch.previewEnabled !== "boolean") {
           throw new ApiError(
@@ -652,6 +669,9 @@ export function createStore(config) {
   async function createShare(id, { expiresAt = null } = {}) {
     return withLock(id, async () => {
       const meta = await readRawMeta(id);
+      if (meta?.lifecycleState === "trashed") {
+        throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
+      }
 
       if (!meta) {
         throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
@@ -787,7 +807,7 @@ export function createStore(config) {
       (s) => s.id === shareId
     );
 
-    if (!share) {
+    if (!share || meta?.lifecycleState === "trashed") {
       return null;
     }
 
@@ -882,6 +902,9 @@ export function createStore(config) {
   async function createDeployKey(id, { expiresAt = null } = {}) {
     return withLock(id, async () => {
       const meta = await readRawMeta(id);
+      if (meta?.lifecycleState === "trashed") {
+        throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
+      }
 
       if (!meta) {
         throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
@@ -1023,7 +1046,7 @@ export function createStore(config) {
       (k) => k.id === keyId
     );
 
-    if (!key) {
+    if (!key || meta?.lifecycleState === "trashed") {
       return null;
     }
 
