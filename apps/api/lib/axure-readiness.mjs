@@ -40,7 +40,13 @@ const RISK_RULES = [
 ];
 
 function count(text, re) {
-  return [...text.matchAll(re)].length;
+  // Avoid allocating a potentially gigantic matches array for hostile HTML.
+  let result = 0;
+  for (const match of text.matchAll(re)) {
+    result++;
+    if (result >= 100000) break;
+  }
+  return result;
 }
 
 export async function analyzeAxureReadiness(store, projectId, requestedVersion) {
