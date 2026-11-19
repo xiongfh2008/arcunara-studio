@@ -28,12 +28,14 @@ import { saveConfig } from "./lib/config.mjs";
 import { apiRequest, ApiError } from "./lib/client.mjs";
 import { publishOnce, fmtSize } from "./lib/deploy.mjs";
 import { watchDir } from "./lib/watch.mjs";
+import { detectStaticOutput, localBuildCommand } from "./lib/publish.mjs";
 
 const USAGE = `Arcunara CLI — AI 原型自动发布
 
 用法:
   arcunara init [--project <id>] [--api <url>] [--preview-base <url>] [--dir <path>]
   arcunara deploy [path] [--project <id>] [--api <url>] [--preview-base <url>] [--build]
+  arcunara publish [--project <id>] [--api <url>] [--dir <dist>] [--skip-build]
   arcunara status [--project <id>] [--api <url>] [--preview-base <url>]
   arcunara versions [--project <id>] [--api <url>]
   arcunara rollback <version> [--project <id>] [--api <url>] [--yes]
@@ -284,6 +286,45 @@ async function cmdDeploy(argv) {
   }
 }
 
+// One-step local static website publication for AI coding assistants.
+// Builds locally (when a package.json build script exists), verifies a safe
+// index.html output directory, and only then uploads via the existing
+// scoped deploy-key/idempotent version pipeline.
+async function cmdPublish(argv) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      project: { type: "string" },
+      api: { type: "string" },
+      "preview-base": { type: "string" },
+      dir: { type: "string" },
+      "skip-build": { type: "boolean", default: false },
+      "build-command": { type: "string" }
+    },
+    strict: true
+  });
+  const ctx = resolveContext(values);
+  const config = loadConfigSync();
+  const configuredDir = values.dir || config?.uploadDir || null;
+  if (!values["skip-build"]) {
+    const command = await localBuildCommand(process.cwd(),
+      values["build-command"] || config?.buildCommand);
+    if (command) await runBuild(command);
+    else out("未配置构建命令，尝试发布现有静态构建目录");
+  }
+  const sourcePath = await detectStaticOutput(process.cwd(), configuredDir);
+  out("静态发布目录: " + sourcePath);
+  const { view } = await publishOnce({
+    apiBase: ctx.apiBase, projectId: ctx.projectId,
+    token: ctx.token, sourcePath
+  });
+  printDeployResult(view, {
+    previewBase: ctx.previewBase,
+    fileCount: view.deduplicated ? null : view.fileCount ?? null,
+    totalSize: view.deduplicated ? null : view.totalSize ?? null
+  });
+}
+
 async function cmdStatus(argv) {
   const { values } = parseArgs({
     args: argv,
@@ -445,6 +486,7 @@ const [command, ...rest] = process.argv.slice(2);
 const commands = {
   init: cmdInit,
   deploy: cmdDeploy,
+  publish: cmdPublish,
   status: cmdStatus,
   versions: cmdVersions,
   rollback: cmdRollback,
