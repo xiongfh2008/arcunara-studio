@@ -326,6 +326,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
               <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
               <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
               <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
+              <button type="button" id="analyzeAxureBtn" class="ghost">Axure 转换评估</button>
             </div>
             <div class="detail-caption"><span id="summaryState" class="status-chip">—</span><span id="summaryFiles">—</span> 个文件 · <span id="summarySize">—</span></div>
           </div>
@@ -360,6 +361,14 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
     </div>
   </main>
 </div>
+<dialog class="create-dialog" id="axureReadinessDialog" aria-labelledby="axureReadinessHeading">
+  <div class="create-dialog-header"><h2 id="axureReadinessHeading">Axure 转换评估</h2><button type="button" class="ghost" id="closeAxureReadinessBtn">关闭</button></div>
+  <div class="create-dialog-content"><p id="axureReadinessSummary" class="hint"></p>
+    <p class="hint">评估结果仅用于识别页面、控件和交互风险；并非原生 Axure .rp 文件。可编辑 .rp 导出仍需原生编译器验证。</p>
+    <pre id="axureReadinessJson" style="white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;background:var(--panel2);padding:14px;border:1px solid var(--border);border-radius:10px;font-size:12px"></pre>
+    <button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button>
+  </div>
+</dialog>
 <dialog class="create-dialog manage-dialog" id="manageDialog" aria-labelledby="manageDialogHeading">
   <div class="create-dialog-header"><h2 id="manageDialogHeading">项目管理</h2><button id="closeManageDialog" class="ghost" type="button">关闭</button></div>
   <div class="manage-dialog-content"><nav class="detail-tabs" role="tablist" aria-label="项目功能管理">
@@ -1363,6 +1372,33 @@ $("refreshBtn").addEventListener("click", async () => {
 });
 
 $("projectSearch").addEventListener("input", renderProjects);
+
+$("analyzeAxureBtn").addEventListener("click", async () => {
+  if (!selected) return;
+  const btn = $("analyzeAxureBtn");
+  if (btn.disabled) return;
+  setBusy(btn, true, "分析中…");
+  try {
+    const version = selectedVersion || selected.currentVersion;
+    const report = await api(`/api/projects/${selected.id}/axure-readiness?version=${version}`);
+    $("axureReadinessSummary").textContent = `已分析 v${report.version}：${report.analyzedPages} / ${report.totalHtmlPages} 个 HTML 页面；${report.risks.length} 项转换风险。`;
+    $("axureReadinessJson").textContent = JSON.stringify(report, null, 2);
+    $("axureReadinessDialog").showModal();
+  } catch (err) {
+    feedback("Axure 转换评估失败：" + friendlyError(err), false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+$("closeAxureReadinessBtn").addEventListener("click", () => $("axureReadinessDialog").close());
+$("copyAxureReadinessBtn").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("axureReadinessJson").textContent);
+    feedback("转换评估报告已复制", true);
+  } catch {
+    feedback("无法自动复制，请手动选择报告内容", false);
+  }
+});
 $("lifecycleFilter").addEventListener("change", renderProjects);
 
 async function changeLifecycle(state) {
