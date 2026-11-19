@@ -246,7 +246,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           const payload = await readJsonPayload(req, config.limits);
           const patch = {};
 
-          for (const key of ["name", "description", "previewEnabled"]) {
+          for (const key of ["name", "description", "previewEnabled", "lifecycleState"]) {
             if (payload[key] !== undefined) {
               patch[key] = payload[key];
             }
@@ -265,7 +265,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           return sendJson(res, 404, { error: "Not Found" });
         }
         const meta = await store.readRawMeta(ticketMatch[1]);
-        if (!meta || meta.previewEnabled === false) {
+        if (!meta || meta.previewEnabled === false || meta.lifecycleState === "trashed") {
           return sendJson(res, 404, { error: "Not Found" });
         }
         const ticket = previewTickets.issue(ticketMatch[1]);
