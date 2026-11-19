@@ -13,12 +13,14 @@ import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
 import { analyzeAxureReadiness } from "./axure-readiness.mjs";
+import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
+const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const VERSION_NOTE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions/([0-9]+)$`);
@@ -239,6 +241,23 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         }
         const version = rawVersion === null ? undefined : Number(rawVersion);
         return sendJson(res, 200, await analyzeAxureReadiness(store, readinessMatch[1], version));
+      }
+
+      // GitHub integration is opt-in: provide a downloadable workflow only.
+      // The server never connects to GitHub or reads/stores a repository key.
+      const workflowMatch = WORKFLOW_RE.exec(pathname);
+      if (workflowMatch && req.method === "GET") {
+        const id = workflowMatch[1];
+        const project = await store.getProject(id);
+        if (project.lifecycleState === "trashed") {
+          throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
+        }
+        const qs = new URL(req.url || "/", "http://localhost").searchParams;
+        return sendJson(res, 200, generateGithubWorkflow({
+          projectId: id,
+          outputDir: qs.get("outputDir") ?? "dist",
+          buildMode: qs.get("buildMode") ?? "npm"
+        }));
       }
 
       const detailMatch = DETAIL_RE.exec(pathname);
