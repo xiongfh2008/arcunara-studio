@@ -14,6 +14,7 @@ import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
 import { analyzeAxureReadiness } from "./axure-readiness.mjs";
 import { generateGithubWorkflow } from "./github-workflow.mjs";
+import { compareProjectVersions } from "./version-diff.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
@@ -23,6 +24,7 @@ const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
+const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions$`);
 const VERSION_NOTE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions/([0-9]+)$`);
 const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
@@ -224,6 +226,19 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           versionNoteMatch[1], Number(versionNoteMatch[2]), payload.note
         );
         return sendJson(res, 200, result);
+      }
+
+      const diffMatch = VERSION_COMPARE_RE.exec(pathname);
+      if (diffMatch && req.method === "GET") {
+        const qs = new URL(req.url || "/", "http://localhost").searchParams;
+        const from = qs.get("from");
+        const to = qs.get("to");
+        if (!from || !to || !/^[1-9][0-9]*$/.test(from) || !/^[1-9][0-9]*$/.test(to)) {
+          throw new ApiError(400, "Invalid version parameters", "INVALID_VERSION");
+        }
+        return sendJson(res, 200, await compareProjectVersions(
+          store,diffMatch[1],Number(from),Number(to)
+        ));
       }
 
       const rollbackMatch = ROLLBACK_RE.exec(pathname);

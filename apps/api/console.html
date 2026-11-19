@@ -397,6 +397,16 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
       <label class="field" style="margin:0;flex:1;min-width:230px"><span>所选版本的更新说明（500字以内）</span><input id="versionNoteInput" maxlength="500" placeholder="例如：调整付款配置弹窗和字段校验" /></label>
       <button type="button" id="saveVersionNoteBtn" class="ghost">保存说明</button>
     </div>
+    <section class="details-fold" aria-label="版本文件差异对比">
+      <h4 style="margin:0 0 8px">版本文件差异</h4>
+      <p class="hint">按文件路径、文件大小和 SHA-256 内容哈希比较两个历史版本。只读取文件，不修改项目或执行任何上传的脚本。</p>
+      <div class="row">
+        <label class="field" style="margin:0"><span>比较起点</span><select id="diffFromVersion" aria-label="比较起点版本"></select></label>
+        <label class="field" style="margin:0"><span>比较终点</span><select id="diffToVersion" aria-label="比较终点版本"></select></label>
+        <button type="button" class="ghost" id="compareVersionsBtn">比较版本</button>
+      </div>
+      <pre id="versionDiffReport" role="status" style="background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:12px;white-space:pre-wrap;word-break:break-word;max-height:270px;overflow:auto;font-size:12px">选择两个版本后点击比较</pre>
+    </section>
     <div class="row" style="margin-top:10px">
       <button id="rollbackBtn" class="danger">回滚到选中版本</button>
       <span class="hint">回滚只切换当前版本指针，预览链接与分享链接不变，都指向当前版本。</span>
@@ -968,6 +978,21 @@ function renderDetail() {
   }
 
   $("versionNoteInput").value = versions.find(v => v.version === selectedVersion)?.note || "";
+  for (const id of ["diffFromVersion", "diffToVersion"]) {
+    const sel = $(id);
+    sel.textContent = "";
+    for (const version of versions) {
+      const item = document.createElement("option");
+      item.value = String(version.version);
+      item.textContent = "v" + version.version;
+      sel.appendChild(item);
+    }
+  }
+  const orderedVersions = [...versions].sort((a,b)=>a.version-b.version);
+  $("diffFromVersion").value = String(orderedVersions.at(-2)?.version ?? orderedVersions.at(-1)?.version ?? "");
+  $("diffToVersion").value = String(selected.currentVersion);
+  $("compareVersionsBtn").disabled = orderedVersions.length === 0;
+  $("versionDiffReport").textContent = "选择两个版本后点击比较";
   renderRecentVersions();
   renderShares();
   renderDeployKeys();
@@ -1734,6 +1759,30 @@ $("saveVersionNoteBtn").addEventListener("click", async () => {
   } finally {
     setBusy(btn, false);
   }
+});
+
+$("compareVersionsBtn").addEventListener("click", async () => {
+  if (!selected) { feedback("请先选择项目", false); return; }
+  const btn = $("compareVersionsBtn");
+  const from = $("diffFromVersion").value;
+  const to = $("diffToVersion").value;
+  setBusy(btn, true, "比较中…");
+  try {
+    const data = await api(`/api/projects/${selected.id}/compare-versions?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const c = data.counts;
+    const rows = [`v${data.fromVersion} → v${data.toVersion}`,
+      `新增：${c.added} · 删除：${c.removed} · 修改：${c.changed} · 未变化：${c.unchanged}`,
+      "",
+      ...data.added.map(x => "+  " + x.path),
+      ...data.removed.map(x => "-  " + x.path),
+      ...data.changed.map(x => "~  " + x.path)
+    ];
+    $("versionDiffReport").textContent = rows.join("\n");
+    feedback("版本差异已计算（只读）", true);
+  } catch (err) {
+    $("versionDiffReport").textContent = "比较失败：" + friendlyError(err);
+    feedback("版本差异对比失败：" + friendlyError(err), false);
+  } finally { setBusy(btn, false); }
 });
 
 $("rollbackBtn").addEventListener("click", async () => {
