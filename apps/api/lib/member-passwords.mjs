@@ -59,6 +59,7 @@ export function createMemberPasswords(config,store) {
   const enabled=config.memberLoginEnabled===true;
   const filename=path.join(store.root,".rc20-team.json");
   const loginFailures=new Map();
+  const activationFailures=new Map();
   const explicitOrigin=config.memberPublicOrigin||null;
 
   function requireEnabled(){
@@ -171,8 +172,18 @@ export function createMemberPasswords(config,store) {
         expiresAt:new Date(expiresAt).toISOString()};
     });
   }
-  async function activate({email,code,password}){
+  async function activate(value,req){
     requireEnabled();
+    const {email,code,password}=value&&typeof value==="object"?value:{};
+    const key=normalizedEmail(email)+"|"+String(req.socket.remoteAddress||"unknown");
+    const time=Date.now();
+    for(const [k,v] of activationFailures)if(v.until<=time)activationFailures.delete(k);
+    const previous=activationFailures.get(key);
+    if(previous?.count>=12&&previous.until>time) {
+      throw new ApiError(429,"Too many activation attempts","MEMBER_ACTIVATE_RATE_LIMIT");
+    }
+    if(activationFailures.size>2000)activationFailures.delete(activationFailures.keys().next().value);
+    activationFailures.set(key,{count:(previous?.count||0)+1,until:time+LOGIN_WINDOW});
     if(!passwordOk(password)) {
       throw new ApiError(400,"Password must be 12–128 characters","MEMBER_PASSWORD_POLICY");
     }
@@ -197,17 +208,20 @@ export function createMemberPasswords(config,store) {
       user.tokenHash=null;
       user.updatedAt=new Date().toISOString();
       audit(state,"password-activated",user.id);
+      activationFailures.delete(key);
       return {activated:true};
     });
   }
-  async function login({email,password},req) {
+  async function login(value,req) {
     requireEnabled();
+    const {email,password}=value&&typeof value==="object"?value:{};
     const key=normalizedEmail(email);
     if(!key || key.length>254||typeof password!=="string"||
         password.length>128)return {ok:false};
     const now=Date.now();
     for(const [k,v] of loginFailures) if(v.until<=now)loginFailures.delete(k);
     const clientKey=key+"|"+String(req.socket.remoteAddress||"unknown");
+    if(loginFailures.size>2000)loginFailures.delete(loginFailures.keys().next().value);
     const attempt=loginFailures.get(clientKey);
     if(attempt?.count>=MAX_ATTEMPTS&&attempt.until>now){
       throw new ApiError(429,"Too many login attempts","MEMBER_LOGIN_RATE_LIMIT");
@@ -264,7 +278,7 @@ export function createMemberPasswords(config,store) {
     requireEnabled();
     if(!passwordOk(newPassword))throw new ApiError(400,
       "Password must be 12–128 characters","MEMBER_PASSWORD_POLICY");
-    if(typeof oldPassword!=="string")throw new ApiError(400,"Invalid password","MEMBER_PASSWORD_POLICY");
+    if(typeof oldPassword!=="string" || oldPassword.length>128)throw new ApiError(400,"Invalid password","MEMBER_PASSWORD_POLICY");
     const data=await load();
     const existing=data.users.find(x=>x.id===userId&&x.enabled!==false);
     if(!existing||!await verifyPassword(oldPassword,existing.passwordHash)){
