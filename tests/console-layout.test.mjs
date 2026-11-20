@@ -68,8 +68,10 @@ test("focuses the sidebar on projects and places features in selected project ca
   assert.match(html, /class="app-layout"/);
   assert.match(html, /class="app-sidebar"/);
   assert.match(html, /class="project-table-head"/);
-  assert.match(html, /class="content-grid"/);
-  assert.match(html, /--bg:#f6f8fc/);
+  assert.match(html, /<table class="project-table" aria-label="项目列表">/);
+  assert.equal((html.match(/<th scope="col"/g) ?? []).length, 5);
+  assert.match(html, /<tbody id="projectList" aria-busy="false"><\/tbody>/);
+  assert.match(html, /class="project-name-button" aria-haspopup="dialog" aria-controls="detailCard"/);
   assert.equal((html.match(/class="side-nav side-nav-current"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /data-module="(shares|deploy|stats|settings)"/);
   assert.match(html, /id="activeShareCount"/);
@@ -88,14 +90,18 @@ test("focuses the sidebar on projects and places features in selected project ca
   assert.doesNotMatch(html, /产品设计工作区|搜索项目、版本或分享|200 MB/);
 });
 
-test("the version upload dialog has working file and paste modes", () => {
+test("project creation and version upload offer independent file and paste modes", () => {
   assert.match(html, /id="versionDropzone"/);
   assert.match(html, /id="versionFilePanel"/);
   assert.match(html, /id="versionHtmlPanel"/);
   assert.match(html, /id="versionHtml"/);
   assert.match(html, /data-upload-mode="file"/);
   assert.match(html, /data-upload-mode="html"/);
-  assert.match(html, /function setVersionUploadMode\(mode\)/);
+  assert.match(html, /function setUploadMode\(dialog, mode\)/);
+  for (const panel of ["newFilePanel", "newHtmlPanel", "versionFilePanel", "versionHtmlPanel"]) {
+    assert.match(html, new RegExp('aria-controls="' + panel + '"'));
+    assert.match(html, new RegExp('id="' + panel + '"'));
+  }
   assert.match(html, /new DataTransfer\(\)/);
   assert.match(html, /body: JSON\.stringify\(\{ html \}\)/);
   assert.match(html, /method: "POST", body: fd/);
