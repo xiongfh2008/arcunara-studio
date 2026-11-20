@@ -20,6 +20,7 @@ import { compareProjectVersions } from "./version-diff.mjs";
 import { exportProjectVersionZip } from "./zip-export.mjs";
 import { readEditableHtml, publishEditedHtml } from "./html-editor.mjs";
 import { listSourceFiles, readSourceFile, publishSourceChanges } from "./project-files.mjs";
+import { createAiGenerator } from "./ai-generator.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
@@ -86,6 +87,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
   const cloudflareAccess = createCloudflareAccessAuth(config);
   const team = createTeamAccess(config, store);
   const passwords=createMemberPasswords(config,store);
+  const ai=createAiGenerator(config);
   // The internal workbench is static, contains no credentials and remains
   // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
@@ -344,6 +346,15 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       }
       if (memberMatch && req.method === "DELETE") {
         return sendJson(res,200,await team.removeMember(memberMatch[1],memberMatch[2]));
+      }
+
+      // Opt-in paid model calls are restricted to the existing global
+      // administrator identity; member tokens and deploy keys are excluded.
+      if (req.method==="GET" && pathname==="/api/ai/status")
+        return sendJson(res,200,ai.status());
+      if (req.method==="POST" && pathname==="/api/ai/generate"){
+        const payload=await readJsonPayload(req,config.limits);
+        return sendJson(res,200,await ai.generate(payload));
       }
 
       if (req.method === "GET" && pathname === "/api/limits") {
