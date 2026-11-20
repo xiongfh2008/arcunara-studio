@@ -52,6 +52,31 @@ node packages/rp-converter/local-cli.mjs compile "D:\AI\examples\draft.rp1.json"
 - 布局：有明确 inline CSS 的像素值则保留；无定位时生成稳定位置并逐项标记 `LAYOUT_SYNTHESIZED`，需要人工整理。
 - 外部链接与不可信路径不生成可执行动作；没有 JS/HTML 的执行或网络访问。
 
+## RC18C：推荐的本机安全流程
+
+本机新建工作目录，保持导出的 JSON 与同版本源 ZIP 为不同文件。使用 Node.js 24：
+
+1. 在 Arcunara 工作台下载 `*.rp1.json` 以及对应版本的 ZIP；解压源 ZIP 至 `D:\AI\ArcunaraExports\version-source`。
+2. 只将 JSON 中实际引用的图片与 RP/1 JSON 一起暂存到新目录（不会复制未引用文件、JS、HTML、隐藏文件）：
+
+```powershell
+cd D:\AI\arcunara-studio
+node packages/rp-converter/local-cli.mjs stage "D:\AI\ArcunaraExports\source.rp1.json" "D:\AI\ArcunaraExports\version-source" "D:\AI\ArcunaraExports\native-stage"
+```
+
+3. 检查 `native-stage\manifest.json` 中的资源及 SHA-256，然后以本机已配置的 Zee-RP 执行编译：
+
+```powershell
+node packages/rp-converter/local-cli.mjs compile "D:\AI\ArcunaraExports\native-stage\source.rp1.json" "D:\AI\zee-rp" "D:\AI\ArcunaraExports\output.rp"
+```
+
+4. 只有完成 Zee-RP `check`、`generate`、`decompile` 后，才创建 `output.rp` 与 `output.rp.verification.json`。任何错误不会产出声称成功的 .rp；如缺少 `AXURE_BLANK_TEMPLATE_RP9` 等 Zee-RP 所需资源，必须先按 Zee-RP 的文档准备，不修改 Arcunara 服务器。
+5. 在 Axure RP9（如可用）及目标 Axure RP11 **分别**测试文件是否能打开、编辑按钮/文字/输入等元件、保存关闭并重开。打开成功不代表全部事件、样式保真。把文件 SHA-256、应用版本、操作结果及截图保存为独立的验收记录。
+
+`verification.json` 中 `hostValidation` 的每一项默认为 `null`，`nativeRp11Certified:false`。**绝不因为 CLI 成功而自动将其改为 true。**
+
+限制：RC18C 是显式本地 CLI 工具，平台 API 不执行 Zee-RP，不提供无条件的线上“一键生成 RP11”。Mock CI 测试只验证编排/错误处理，不构成真实原生编译成功证据。
+
 ## 后续工作
 
 正式 RC18C 再接 Zee-RP 独立 Worker，包含安装版本锁定、运行沙箱、源资源打包、后台任务队列、RP9 结构检查与真实 RP11 宿主验收。当前 RC18B 仅提供本地编译入口，不向公网站点直接暴露原生输出。
