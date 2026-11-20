@@ -501,6 +501,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 #htmlEditorPreview{height:min(53vh,540px);min-height:320px;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px}
 #htmlEditorStatus:not(:empty){padding:9px 0}
 @media(max-width:760px){.rc21-editor-grid{grid-template-columns:1fr}#htmlEditorSource,#htmlEditorPreview{height:340px;min-height:280px}}
+
+/* RC21B/C source trees, text diff, isolated preview and AI draft workflow */
+.rc21-files-dialog{width:min(1310px,97vw);max-width:97vw}
+.rc21-files-dialog .create-dialog-content,.rc21-ai-dialog .create-dialog-content{max-height:78vh;overflow-y:auto}
+.rc21-files-layout{display:grid;grid-template-columns:minmax(180px,260px) minmax(0,1fr);gap:14px;min-height:410px}
+.rc21-file-actions{margin:0 0 10px}
+.rc21-file-tree{border:1px solid var(--border);background:var(--panel2);padding:11px;border-radius:10px;overflow:auto;max-height:54vh}
+#projectFilesTree{margin:0;padding:0;list-style:none}
+#projectFilesTree li{padding:0;margin:0}
+#projectFilesTree button{display:block;width:100%;padding:8px 6px;text-align:left;background:none;color:var(--text);border:0;border-radius:5px;overflow-wrap:anywhere;font-size:12px}
+#projectFilesTree button[aria-current="true"]{background:#e9edff;color:#4050b1}
+#projectFilesTree button:disabled{opacity:.55;cursor:default}
+.rc21-file-workspace{min-width:0}
+#projectFilesSource{min-height:330px;height:50vh;width:100%;resize:vertical;font:12px/1.55 ui-monospace,Consolas,monospace;tab-size:2}
+.rc21-diff{max-height:360px;overflow:auto;background:#f4f6fb;border:1px solid var(--border);border-radius:8px;padding:12px;white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace}
+.rc21-preview{height:340px;width:100%;background:white;border:1px solid var(--border);border-radius:9px}
+.rc21-ai-dialog{width:min(880px,94vw);max-width:94vw}
+#aiGeneratedHtml{width:100%;height:180px;font:12px/1.5 ui-monospace,Consolas,monospace}
+#aiPrompt{min-height:110px}
+.rc21-ai-dialog #aiGeneratedResult{margin-top:12px}
+.member-mode #openAiGenerateBtn{display:none!important}
+.viewer-mode #saveProjectFilesBtn,.viewer-mode #projectFilesCreateBtn,.viewer-mode #projectFilesDeleteBtn{display:none!important}
+@media(max-width:760px){.rc21-files-layout{grid-template-columns:1fr}.rc21-file-tree{max-height:160px}#projectFilesSource{height:300px;min-height:240px}}
 </style>
 </head>
 <body>
@@ -588,6 +611,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
         <div class="project-top-actions">
           <div class="workspace-actions">
             <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
+            <button type="button" id="openAiGenerateBtn" class="ghost hidden">AI 生成原型</button>
             <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
           </div>
           <div class="project-search-controls" role="search" aria-label="搜索和筛选原型项目">
@@ -620,6 +644,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
               <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
               <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
               <button type="button" id="openHtmlEditorBtn" class="ghost">在线编辑 HTML</button>
+              <button type="button" id="openProjectFilesBtn" class="ghost">编辑项目文件</button>
               <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
               <button type="button" id="analyzeAxureBtn" class="ghost">Axure 转换评估</button>
             </div>
@@ -875,6 +900,64 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       </details>
 </div>
 </div>
+</dialog>
+<dialog class="create-dialog rc21-files-dialog" id="projectFilesDialog" aria-labelledby="projectFilesHeading">
+  <div class="create-dialog-header">
+    <h2 id="projectFilesHeading">多文件原型编辑</h2>
+    <button type="button" id="closeProjectFilesBtn" class="ghost">关闭</button>
+  </div>
+  <div class="create-dialog-content">
+    <p class="hint">HTML / CSS / JS / JSON / SVG / 文本文件可编辑；图片和二进制资源原样保留。保存会创建新版本，网站不会自动重新发布。</p>
+    <div class="row rc21-file-actions">
+      <span class="hint" id="projectFilesBase">版本：—</span>
+      <button type="button" class="ghost" id="projectFilesCreateBtn">新增文件</button>
+      <button type="button" class="ghost" id="projectFilesDeleteBtn">删除选中</button>
+      <button type="button" class="ghost" id="projectFilesDiffBtn">查看差异</button>
+      <button type="button" class="ghost" id="projectFilesPreviewBtn">静态预览 HTML</button>
+    </div>
+    <div class="rc21-files-layout">
+      <div class="rc21-file-tree" role="navigation" aria-label="项目文件树">
+        <p class="hint">项目文件</p>
+        <ul id="projectFilesTree"></ul>
+      </div>
+      <div class="rc21-file-workspace">
+        <label class="field">
+          <span id="projectFilesCurrent">选择文件开始编辑</span>
+          <textarea id="projectFilesSource" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="当前文件源码"></textarea>
+        </label>
+        <p id="projectFilesByteCount" class="hint">文本文件上限 180000 字节</p>
+        <pre id="projectFilesDiff" class="rc21-diff hidden" aria-live="polite"></pre>
+        <iframe id="projectFilesPreview" class="rc21-preview hidden" title="不执行脚本的多文件原型静态预览" sandbox="" referrerpolicy="no-referrer"></iframe>
+      </div>
+    </div>
+    <p id="projectFilesStatus" class="hint" role="status" aria-live="polite"></p>
+    <div class="upload-footer">
+      <button type="button" id="cancelProjectFilesBtn" class="ghost">取消</button>
+      <button type="button" id="saveProjectFilesBtn">保存为新版本</button>
+    </div>
+  </div>
+</dialog>
+<dialog class="create-dialog rc21-ai-dialog" id="aiGenerateDialog" aria-labelledby="aiGenerateHeading">
+  <div class="create-dialog-header">
+    <h2 id="aiGenerateHeading">AI 生成 HTML 原型</h2>
+    <button type="button" id="closeAiGenerateBtn" class="ghost">关闭</button>
+  </div>
+  <div class="create-dialog-content">
+    <p class="hint">由管理员调用 DeepSeek 生成单页 HTML 草稿。需要先配置服务器 API 密钥；生成消耗 API 费用。草稿不会自动发布。</p>
+    <label class="field"><span>项目名称</span><input id="aiProjectName" maxlength="100" placeholder="例如：金融后台操作台"></label>
+    <label class="field"><span>页面描述（2400 字以内）</span><textarea id="aiPrompt" maxlength="2400" placeholder="描述页面用途、板块、表单、配色、交互和适配设备…"></textarea></label>
+    <div class="row">
+      <button type="button" id="aiGenerateActionBtn">生成草稿</button>
+      <span id="aiGenerationQuota" class="hint"></span>
+    </div>
+    <div id="aiGeneratedResult" class="hidden">
+      <div class="row rc21-file-actions"><button type="button" id="aiPreviewToggleBtn" class="ghost">查看静态预览</button><button type="button" id="aiLoadExistingBtn" class="ghost">放入当前单 HTML 编辑器</button></div>
+      <textarea id="aiGeneratedHtml" spellcheck="false" aria-label="生成的 HTML 草稿源码"></textarea>
+      <iframe id="aiGeneratedPreview" class="rc21-preview" title="AI 草稿静态预览，不执行脚本" sandbox="" referrerpolicy="no-referrer"></iframe>
+      <button type="button" id="aiCreateProjectBtn">审核后创建项目</button>
+    </div>
+    <p id="aiGeneratedStatus" class="hint" role="status" aria-live="polite"></p>
+  </div>
 </dialog>
 <dialog class="create-dialog rc21-editor-dialog" id="htmlEditorDialog" aria-labelledby="htmlEditorHeading">
   <div class="create-dialog-header"><h2 id="htmlEditorHeading">在线编辑 HTML 原型</h2><button type="button" id="closeHtmlEditorBtn" class="ghost">关闭</button></div>
