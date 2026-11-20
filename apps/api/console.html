@@ -503,8 +503,8 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
     </div>
     <p class="hint">停用预览后，旧预览地址 /p/{id}/ 的页面与全部静态资源都会被服务端拒绝（404）；已创建的分享链接不受影响，可在分享管理中单独撤销或停用。</p>
     <p class="lifecycle-state" id="lifecycleCurrent">项目状态：进行中</p>
-    <div class="lifecycle-actions"><button type="button" id="archiveProjectBtn" class="ghost">归档项目</button><button type="button" id="trashProjectBtn" class="danger">移入回收站</button><button type="button" id="restoreProjectBtn" class="ghost">恢复项目</button></div>
-    <p class="hint">回收站为可恢复的软删除：不会物理删除版本文件；回收站项目的预览、分享、临时预览与部署会被拒绝。归档仅用于工作台整理。</p>
+    <div class="lifecycle-actions"><button type="button" id="archiveProjectBtn" class="ghost">归档项目</button><button type="button" id="trashProjectBtn" class="danger">移入回收站</button><button type="button" id="restoreProjectBtn" class="ghost">恢复项目</button><button type="button" id="purgeProjectBtn" class="danger hidden">永久删除</button></div>
+    <p class="hint">回收站暂不删除文件，可恢复。仅回收站项目可执行“永久删除”，会清空全部历史版本、分享链接及部署密钥，无法恢复。</p>
 
 
       <details class="details-fold">
@@ -900,6 +900,7 @@ function renderDetail() {
   $("archiveProjectBtn").classList.toggle("hidden", lc !== "active");
   $("trashProjectBtn").classList.toggle("hidden", lc === "trashed");
   $("restoreProjectBtn").classList.toggle("hidden", lc === "active");
+  $("purgeProjectBtn").classList.toggle("hidden", lc !== "trashed");
   $("previewQuickToggle").textContent = selected.previewEnabled === false ? "已停用 · 启用" : "已启用 · 停用";
   $("summaryPreviewUrl").textContent = selected.previewEnabled === false
     ? "预览已停用"
@@ -1589,6 +1590,40 @@ async function changeLifecycle(state) {
 $("archiveProjectBtn").addEventListener("click", () => changeLifecycle("archived"));
 $("trashProjectBtn").addEventListener("click", () => changeLifecycle("trashed"));
 $("restoreProjectBtn").addEventListener("click", () => changeLifecycle("active"));
+$("purgeProjectBtn").addEventListener("click", async () => {
+  if (!selected || selected.lifecycleState !== "trashed") return;
+  const id = selected.id;
+  const name = selected.name;
+  const confirmed = window.prompt(
+    "永久删除“" + name + "”及其所有版本、分享链接和部署密钥，无法恢复。请输入完整项目 ID 确认：\n" + id
+  );
+  if (confirmed === null) return;
+  if (confirmed !== id) {
+    feedback("项目 ID 不匹配，未删除任何内容", false);
+    return;
+  }
+  const btn = $("purgeProjectBtn");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await api("/api/projects/" + id, {
+      method: "DELETE", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirmProjectId: id })
+    });
+    selected = null;
+    versions = [];
+    shares = [];
+    deployKeys = [];
+    $("detailCard").classList.add("hidden");
+    await loadProjects();
+    feedback("项目已永久删除：" + name, true);
+  } catch (err) {
+    feedback("永久删除失败：" + friendlyError(err), false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 
 $("createBtn").addEventListener("click", async () => {
   const btn = $("createBtn");

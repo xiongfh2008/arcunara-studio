@@ -680,6 +680,60 @@ export function createStore(config) {
     });
   }
 
+  // RC16: irreversible removal is a two-step administrator operation:
+  // the project must first be moved to the recoverable trash. Rename it
+  // atomically into the store's private .tmp quarantine under the project
+  // write lock, then remove only that renamed directory. A crash between
+  // rename and cleanup leaves no public project; init() sweeps .tmp on
+  // restart. Never accept a path derived from the request beyond strict UUID.
+  async function permanentlyDeleteProject(id, confirmProjectId) {
+    if (!UUID_RE.test(id)) {
+      throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+    }
+    if (confirmProjectId !== id) {
+      throw new ApiError(400, "Project ID confirmation does not match", "DELETE_CONFIRMATION_MISMATCH");
+    }
+
+    return withLock(id, async () => {
+      const meta = await readRawMeta(id);
+      if (!meta) {
+        throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+      if (meta.id !== undefined && meta.id !== id) {
+        throw new ApiError(409, "Project metadata ID mismatch", "PROJECT_META_MISMATCH");
+      }
+      if (meta.lifecycleState !== "trashed") {
+        throw new ApiError(409, "Move project to trash before permanent deletion", "PROJECT_NOT_TRASHED");
+      }
+
+      const source = projectDir(id);
+      const stat = await fs.lstat(source);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) {
+        throw new ApiError(409, "Unsafe project storage path", "PROJECT_PATH_UNSAFE");
+      }
+
+      const quarantine = path.join(
+        tmpDir, "purge-" + id + "-" + crypto.randomBytes(8).toString("hex")
+      );
+      await fs.rename(source, quarantine); // atomic removal from public lookup
+
+      // Invalidate in-process token indices; validators also read fresh
+      // metadata, so stale links cannot authorize during/after deletion.
+      indexProjectShares(id, { shares: [] });
+      indexProjectDeployKeys(id, { deployKeys: [] });
+
+      try {
+        await fs.rm(quarantine, { recursive: true, force: true });
+      } catch {
+        // The project is already inaccessible. Leftover files are swept by
+        // init() at next startup; never report a successful full purge.
+        throw new ApiError(500, "Project removed but disk cleanup is incomplete", "PROJECT_PURGE_INCOMPLETE");
+      }
+
+      return { projectId: id, deleted: true };
+    });
+  }
+
   // ---- RC5 share management ---------------------------------------------
 
   function shareView(s) {
@@ -1171,6 +1225,7 @@ export function createStore(config) {
     updateVersionNote,
     rollback,
     updateProject,
+    permanentlyDeleteProject,
     createShare,
     listShares,
     revokeShare,
