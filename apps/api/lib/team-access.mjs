@@ -28,6 +28,12 @@ function safeUser(user) {
     enabled:user.enabled !== false,passwordSet:Boolean(user.passwordHash),createdAt:user.createdAt,
     updatedAt:user.updatedAt};
 }
+function auditEvent(state,action,userId,projectId=null) {
+  if(!Array.isArray(state.authAudit))state.authAudit=[];
+  state.authAudit.push({at:new Date().toISOString(),action,userId,
+    ...(projectId?{projectId}:{})});
+  if(state.authAudit.length>200)state.authAudit=state.authAudit.slice(-200);
+}
 function newRegistry() {
   return {schema:"arcunara.team.v1",users:[],memberships:[]};
 }
@@ -100,6 +106,7 @@ export function createTeamAccess(config, store) {
       const user={id,email:normalized,name:name.trim(),enabled:true,
         tokenHash,createdAt:now,updatedAt:now};
       data.users.push(user);
+      auditEvent(data,"member-created",id);
       return {...safeUser(user),token};
     });
   }
@@ -117,6 +124,11 @@ export function createTeamAccess(config, store) {
       const user=data.users.find(u=>u.id===id);
       if(!user)throw new ApiError(404,"User not found","TEAM_USER_NOT_FOUND");
       user.enabled=next;
+      if(next===false) {
+        user.memberSessions=[];
+        delete user.passwordInvite;
+      }
+      auditEvent(data,next?"member-enabled":"member-disabled",id);
       user.updatedAt=new Date().toISOString();
       return safeUser(user);
     });
@@ -129,6 +141,8 @@ export function createTeamAccess(config, store) {
       if(!user)throw new ApiError(404,"User not found","TEAM_USER_NOT_FOUND");
       const {token,tokenHash}=newToken(id);
       user.tokenHash=tokenHash;
+      user.memberSessions=[];
+      auditEvent(data,"member-token-rotated",id);
       user.updatedAt=new Date().toISOString();
       return {...safeUser(user),token};
     });
@@ -174,6 +188,7 @@ export function createTeamAccess(config, store) {
       const found=data.memberships.find(m=>m.projectId===projectId&&m.userId===userId);
       if(found)found.role=role;
       else data.memberships.push({projectId,userId,role});
+      auditEvent(data,"project-role-"+role,userId,projectId);
       return {projectId,userId,role};
     });
   }
@@ -187,6 +202,8 @@ export function createTeamAccess(config, store) {
       const before=data.memberships.length;
       data.memberships=data.memberships.filter(m=>
         !(m.projectId===projectId&&m.userId===userId));
+      if(data.memberships.length<before)
+        auditEvent(data,"project-role-removed",userId,projectId);
       return {projectId,userId,removed:data.memberships.length<before};
     });
   }
