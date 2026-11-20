@@ -23,7 +23,8 @@ function functionText(html,name) {
   assert.ok(start>0,"Missing function "+name);
   const end=html.indexOf("\n}\n",start);
   assert.ok(end>start,"Missing function closure "+name);
-  return html.slice(start,end+2);
+  const begin=html.slice(start-6,start)==="async " ? start-6 : start;
+  return html.slice(begin,end+2);
 }
 
 test("RC19 console preserves all business controls and introduces accessible dashboard navigation",async()=>{
@@ -46,7 +47,7 @@ test("RC19 console preserves all business controls and introduces accessible das
   assert.match(html,/role="search" aria-label="搜索和筛选原型项目"/);
   assert.match(html,/id="projectList" aria-busy="false"/);
   assert.match(html,/aria-label="项目详情引导"/);
-  assert.match(html,/type="button" id="clearProjectSearch"/);
+  assert.match(html,/<button[^>]*type="button"[^>]*id="clearProjectSearch"/);
   assert.match(html,/id="viewTitle">项目管理/);
   assert.doesNotMatch(html,/innerHTML\s*=\s*p\.name/);
 });
