@@ -2,6 +2,7 @@
 
 面向全球用户的 AI 原型转换与托管 SaaS：HTML/ZIP 原型一键托管、更新与分享；后续支持 HTML → Axure RP11 原生 `.rp` 转换、CLI 与各 AI 工具 Skill。
 
+- **RC21B/C/D（完整 RC21 核心链路）**：多文件 HTML/CSS/JS 等在线编辑、文本差异与沙箱草稿预览、可选 DeepSeek 原型生成、人工审核创建、版本乐观并发保护、公开网站版本钉住及明确重发；[功能说明](docs/RC21_COMPLETE.md) / [隔离环境部署](docs/RC21_PREVIEW_DEPLOY.md)。
 - **RC21A（AI 原型 HTML 在线编辑）**：在工作台编辑当前版本的单文件 HTML，提供脚本禁用的静态预览、字节限额、并发版本冲突保护及保存为新版本；多文件 ZIP 继续使用上传更新，不能无损编辑。见 `docs/RC21_HTML_EDITOR.md`。
 - **RC20B（邀请激活与安全登录）**：默认关闭的邀请激活/重置密码、邮箱密码登录、12 小时 HttpOnly Cookie、退出与改密、最近 200 条账号/授权审计；不提供公开注册或自动发信。详见 `docs/RC20_MEMBER_LOGIN.md`。
 - **RC20A（团队账号与项目权限）**：默认关闭的成员 Token 和按项目 viewer/editor 授权，管理员可创建/停用成员、轮换凭证及管理项目权限。不是完整邮箱密码登录或多租户 SaaS；详见 `docs/RC20_TEAM_ACCESS.md`。
