@@ -264,6 +264,8 @@ export function renderNavPage(base, pages, { nativeOrigin = null } = {}) {
   var filterCount = document.getElementById("filterCount");
   var noMatches = document.getElementById("noMatches");
   var viewport = document.getElementById("viewport");
+  var nativePlayer = document.getElementById("nativeAxurePlayer");
+  var nativePlayerBase = nativePlayer && nativePlayer.href;
   var widthButtons = document.querySelectorAll("[data-width]");
   document.getElementById("count").textContent = PAGES.length + " 个业务页面";
 
@@ -273,6 +275,10 @@ export function renderNavPage(base, pages, { nativeOrigin = null } = {}) {
     view.src = item.href;
     current.textContent = item.name;
     document.getElementById("openStandalone").href = item.href;
+    // The native player uses its own Axure navigation state, so give it
+    // the selected business-page name as a best-effort ?p= deep link.
+    // Never derive the destination hostname from uploaded content.
+    if (nativePlayer) nativePlayer.href = nativePlayerBase + "?g=1&p=" + encodeURIComponent(item.name);
     var buttons = list.querySelectorAll(".item");
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].className = i === index ? "item active" : "item";
