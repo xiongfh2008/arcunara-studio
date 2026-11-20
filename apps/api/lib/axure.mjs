@@ -159,7 +159,7 @@ export function matchNavSearch(pages, query) {
 // ever injected into this platform page. `base` is the URL prefix all page
 // links are built under (share-scoped links keep the token on every
 // subresource request automatically via relative URL resolution).
-export function renderNavPage(base, pages) {
+export function renderNavPage(base, pages, { nativeOrigin = null } = {}) {
   const items = pages.map((page) => ({
     name: page.replace(/\.html?$/i, ""),
     href: encodePreviewPath(base, page)
@@ -169,6 +169,11 @@ export function renderNavPage(base, pages) {
   // name cannot break out of the script element.
   const payload = JSON.stringify(items).replace(/</g, "\\u003c");
   const first = items.length > 0 ? items[0].href : "";
+  // Only share-capability URLs may open the separate native origin. Never
+  // export a bare UUID /p path or a native player on the admin hostname.
+  const nativeHref = nativeOrigin && /^\/s\/[0-9a-f]{16}\.[A-Za-z0-9_-]{43}$/.test(base)
+    ? `${nativeOrigin}${base}/index.html`
+    : null;
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -217,6 +222,7 @@ export function renderNavPage(base, pages) {
   <span class="tag" id="count"></span>
   <span class="spacer"></span>
   <a id="openStandalone" href="#" target="_blank" rel="noopener noreferrer">独立页面</a>
+  ${nativeHref ? `<a id="nativeAxurePlayer" href="${nativeHref}" target="_blank" rel="noopener noreferrer">Axure 原生播放器（独立隔离）</a>` : ""}
 </header>
 <main>
   <nav aria-label="业务页面目录">
@@ -258,6 +264,8 @@ export function renderNavPage(base, pages) {
   var filterCount = document.getElementById("filterCount");
   var noMatches = document.getElementById("noMatches");
   var viewport = document.getElementById("viewport");
+  var nativePlayer = document.getElementById("nativeAxurePlayer");
+  var nativePlayerBase = nativePlayer && nativePlayer.href;
   var widthButtons = document.querySelectorAll("[data-width]");
   document.getElementById("count").textContent = PAGES.length + " 个业务页面";
 
@@ -267,6 +275,10 @@ export function renderNavPage(base, pages) {
     view.src = item.href;
     current.textContent = item.name;
     document.getElementById("openStandalone").href = item.href;
+    // The native player uses its own Axure navigation state, so give it
+    // the selected business-page name as a best-effort ?p= deep link.
+    // Never derive the destination hostname from uploaded content.
+    if (nativePlayer) nativePlayer.href = nativePlayerBase + "?g=1&p=" + encodeURIComponent(item.name);
     var buttons = list.querySelectorAll(".item");
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].className = i === index ? "item active" : "item";

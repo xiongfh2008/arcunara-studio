@@ -156,6 +156,30 @@ export function loadConfig(env = process.env) {
     );
   }
 
+
+  // RC22: opt-in native Axure player on a DIFFERENT HTTPS origin.
+  // Native Axure requires same-origin iframe access, storage, XHR and eval.
+  // Never enable that compatibility policy on the admin/staging origin.
+  // The native host serves ONLY share-ticket capability paths, no API or /p.
+  const nativeRaw = (env.ARCU_AXURE_NATIVE_ORIGIN || "").trim();
+  let axureNativeOrigin = null;
+  if (nativeRaw) {
+    let u;
+    try { u = new URL(nativeRaw); }
+    catch { throw new Error("Invalid ARCU_AXURE_NATIVE_ORIGIN"); }
+    if (u.protocol !== "https:" || u.origin !== nativeRaw ||
+        u.username || u.password || u.search || u.hash ||
+        u.pathname !== "/" || u.port !== "" ||
+        u.hostname === "localhost" || !u.hostname.includes(".") ||
+        !stagingPublicPreview || !cloudflareAccess ||
+        u.hostname === new URL(cloudflareAccess.origin).hostname ||
+        (previewPublicBaseUrl &&
+          u.hostname === new URL(previewPublicBaseUrl).hostname)) {
+      throw new Error("ARCU_AXURE_NATIVE_ORIGIN requires a distinct HTTPS host and Cloudflare Access staging preview");
+    }
+    axureNativeOrigin = nativeRaw;
+  }
+
   // RC20A: opt-in project-scoped member tokens; existing administrator
   // credentials and Cloudflare Access stay unchanged by default.
   const teamFlag = env.ARCU_TEAM_ACCESS_ENABLED || "0";
@@ -257,6 +281,7 @@ export function loadConfig(env = process.env) {
     aiGenerationEnabled,
     aiApiKeyFile,
     stagingPublicPreview,
+    axureNativeOrigin,
     siteHostingEnabled,
     siteDomain: siteHostingEnabled ? siteDomain : null,
     sitePort: portFromEnv(env, "ARCU_SITE_PORT", 3002),
