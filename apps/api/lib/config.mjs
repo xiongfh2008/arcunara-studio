@@ -164,6 +164,31 @@ export function loadConfig(env = process.env) {
   }
   const teamAccessEnabled = teamFlag === "1";
 
+  // RC20B: invitation-only password accounts with HttpOnly sessions.
+  // Disabled by default. Never allow public password auth on a directly
+  // exposed HTTP listener; reverse proxies must terminate HTTPS and reach
+  // Node only through IPv4 loopback.
+  const memberLoginFlag=env.ARCU_MEMBER_LOGIN_ENABLED||"0";
+  if(!["0","1"].includes(memberLoginFlag)) {
+    throw new Error("ARCU_MEMBER_LOGIN_ENABLED must be 0 or 1");
+  }
+  const memberLoginEnabled=memberLoginFlag==="1";
+  const originRaw=(env.ARCU_MEMBER_PUBLIC_ORIGIN||"").trim();
+  let memberPublicOrigin=null;
+  if(originRaw) {
+    let u;
+    try{u=new URL(originRaw);}
+    catch{throw new Error("Invalid ARCU_MEMBER_PUBLIC_ORIGIN");}
+    if(u.protocol!=="https:"||u.origin!==originRaw||
+        u.username||u.password||u.search||u.hash||u.pathname!=="/") {
+      throw new Error("ARCU_MEMBER_PUBLIC_ORIGIN must be a plain HTTPS origin");
+    }
+    memberPublicOrigin=originRaw;
+  }
+  if(memberLoginEnabled && (!teamAccessEnabled || apiHost!=="127.0.0.1")) {
+    throw new Error("Member login requires team access and loopback API host");
+  }
+
   // RC13: independent public static-site listener. Explicitly opt in and
   // route each project through a distinct UUID subdomain. Never reuse the
   // platform/admin/preview hostname, even though sites are public content.
@@ -212,6 +237,8 @@ export function loadConfig(env = process.env) {
   return {
     cloudflareAccess,
     teamAccessEnabled,
+    memberLoginEnabled,
+    memberPublicOrigin,
     stagingPublicPreview,
     siteHostingEnabled,
     siteDomain: siteHostingEnabled ? siteDomain : null,
