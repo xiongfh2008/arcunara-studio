@@ -289,7 +289,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         return sendJson(res,200,req.teamMember
           ? {type:"member",user:req.teamMember,
               memberships:await team.membershipsForUser(req.teamMember.id)}
-          : {type:"admin",teamEnabled:team.enabled});
+          : {type:"admin",teamEnabled:team.enabled,memberLoginEnabled:passwords.enabled});
       }
 
       // Team registry management requires the existing global administrator
