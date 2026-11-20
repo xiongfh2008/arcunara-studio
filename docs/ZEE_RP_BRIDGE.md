@@ -77,6 +77,16 @@ node packages/rp-converter/local-cli.mjs compile "D:\AI\ArcunaraExports\native-s
 
 限制：RC18C 是显式本地 CLI 工具，平台 API 不执行 Zee-RP，不提供无条件的线上“一键生成 RP11”。Mock CI 测试只验证编排/错误处理，不构成真实原生编译成功证据。
 
+## RC18D：GitHub 上游编译器语义测试
+
+执行 `.github/workflows/zee-rp-contract.yml`，从固定提交 `LilZeeCN/zee-rp@6cc2b8695b1b148548eac4fd776c2f47be358335` 获取真实源码（此 SHA 需要审查才能变更），通过以下源文件执行 `check`：
+
+- `01-multipage-navigation.rp1.json`：多页跳转、文本、输入、样式；
+- `02-inputs-and-images.rp1.json`：表单与图片路径；
+- `03-layout-fallback.rp1.json`：无显式尺寸布局及外链降级。
+
+本阶段 **不运行** `generate`、`decompile` 或 Axure GUI：上游的原生生成依赖用户本地的官方 Axure RP9 模板和资源，仓库未包含；CI 不能从 RP9 的语义检查推断 RP11 兼容。需要在 Windows 实机使用上面的 `stage` 与 `compile` 命令，再进行可编辑性与保存重开验收。
+
 ## 后续工作
 
 正式 RC18C 再接 Zee-RP 独立 Worker，包含安装版本锁定、运行沙箱、源资源打包、后台任务队列、RP9 结构检查与真实 RP11 宿主验收。当前 RC18B 仅提供本地编译入口，不向公网站点直接暴露原生输出。

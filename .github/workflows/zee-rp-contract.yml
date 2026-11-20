@@ -1,0 +1,96 @@
+name: Zee-RP RP/1 semantic contract (RC18D)
+
+# This workflow validates source-level RP/1 compatibility with the REAL
+# upstream Zee-RP checker pinned to a reviewed commit. No production secrets,
+# official Axure template, .rp binary generation, deployment or GUI claims.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/rp-converter/**"
+      - "scripts/rc18d-rp1-contract-fixtures.mjs"
+      - ".github/workflows/zee-rp-contract.yml"
+  pull_request:
+    paths:
+      - "packages/rp-converter/**"
+      - "scripts/rc18d-rp1-contract-fixtures.mjs"
+      - ".github/workflows/zee-rp-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-rp1-check:
+    name: Real Zee-RP RP/1 checker (source only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Arcunara
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned public Zee-RP
+        uses: actions/checkout@v4
+        with:
+          repository: LilZeeCN/zee-rp
+          # Explicitly pinned: updates must be reviewed, never float with main.
+          ref: 6cc2b8695b1b148548eac4fd776c2f47be358335
+          path: _zee-rp
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned Zee-RP Python check prerequisites
+        # Upstream RP/1 check imports its preview/font engine; despite being
+        # a source-only command, it requires Pillow, numpy and scipy.
+        run: |
+          python -m pip install --disable-pip-version-check \
+            "Pillow==11.3.0" \
+            "numpy==2.1.3" \
+            "scipy==1.14.1" \
+            "jsonschema==4.23.0"
+
+      - name: Verify upstream identity and tool files
+        shell: bash
+        run: |
+          test "$(git -C _zee-rp rev-parse HEAD)" = "6cc2b8695b1b148548eac4fd776c2f47be358335"
+          test -f _zee-rp/scripts/proto.mjs
+          test -f _zee-rp/scripts/rp_language_cli.py
+          node -e 'const pkg = require("./_zee-rp/package.json"); if (pkg.name !== "zee-rp") process.exit(1)'
+
+      - name: Generate Arcunara RP/1 fixtures
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/arcunara-rp1"
+          node scripts/rc18d-rp1-contract-fixtures.mjs "$RUNNER_TEMP/arcunara-rp1"
+
+      - name: Check each converted source with real Zee-RP compiler front end
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          for spec in "$RUNNER_TEMP"/arcunara-rp1/*.rp1.json; do
+            echo "::group::RP/1 semantic check: $(basename "$spec")"
+            node _zee-rp/scripts/proto.mjs check --spec "$spec"
+            echo "::endgroup::"
+            count=$((count + 1))
+          done
+          test "$count" -eq 3
+          echo "Validated $count Arcunara RP/1 fixtures with real pinned Zee-RP (source only)."
+
+      - name: Record scope of result
+        run: |
+          echo "PASS: RP/1 semantic source compatibility (target=9)"
+          echo "NOT TESTED: native .rp generation (official Axure RP9 template unavailable)"
+          echo "NOT TESTED: Axure RP9/RP11 GUI open/edit/save/reopen"

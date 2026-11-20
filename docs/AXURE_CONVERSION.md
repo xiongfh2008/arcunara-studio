@@ -52,6 +52,16 @@
 - **验证分级**：本机 check+decompile 是 Zee-RP 自身的结构性检查，不代表 Axure 软件打开成功；未连接用户的 Windows Axure RP11，`nativeRp11Certified` 始终为 false。
 - 仍未添加 VPS/后端原生编译 Worker，也没有在 GitHub CI 中运行真实 Axure 或 Zee-RP 原生生成；CI 仅覆盖 Mock 编译器调用路径、错误保护与资源处理。
 
+## RC18D — Zee-RP 真实 RP/1 语义契约检查
+
+RC18B/RC18C 的模拟编译器测试不能保证 Arcunara 输出的 JSON 能被真实 Zee-RP 识别。为填补这一点，新增 `.github/workflows/zee-rp-contract.yml`。工作流从公开上游 `LilZeeCN/zee-rp` 读取固定提交 `6cc2b8695b1b148548eac4fd776c2f47be358335`，生成 3 个基于 Arcunara 转换器的源文件，并用其 `node scripts/proto.mjs check --spec ...` 执行实际语义验证。
+
+- 覆盖多页、中文标题、文字、按钮与跳页、输入、复选单选、图片路径及无显式布局等场景。
+- 使用 GitHub Actions Linux runner、Node 24 和 Python 3.11；不需要用户的 Axure 模板、VPS 或 API 密钥。
+- 本检查最多证明 `rp/1 target=9` 源码满足该固定版本的语义契约；即使成功，仍没有真实生成、打开、编辑及保存任何 RP9/RP11 文件。
+- 使用固定上游提交，避免依赖随上游 `main` 自动改变；升级需单独审核并重复全量测试。
+- RC18D 的流水线结果必须以 GitHub Actions 实际运行状态为准，不能把静态测试或代码提交等同于通过。
+
 ## 原生导出器后续接入要求
 
 1. 定义可版本化的页面/元件/交互中间模型（节点 ID、几何、文本、样式、图片资源、事件条件）。
