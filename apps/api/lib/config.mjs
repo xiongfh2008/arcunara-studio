@@ -156,6 +156,14 @@ export function loadConfig(env = process.env) {
     );
   }
 
+  // RC20A: opt-in project-scoped member tokens; existing administrator
+  // credentials and Cloudflare Access stay unchanged by default.
+  const teamFlag = env.ARCU_TEAM_ACCESS_ENABLED || "0";
+  if (!["0","1"].includes(teamFlag)) {
+    throw new Error("ARCU_TEAM_ACCESS_ENABLED must be 0 or 1");
+  }
+  const teamAccessEnabled = teamFlag === "1";
+
   // RC13: independent public static-site listener. Explicitly opt in and
   // route each project through a distinct UUID subdomain. Never reuse the
   // platform/admin/preview hostname, even though sites are public content.
@@ -203,6 +211,7 @@ export function loadConfig(env = process.env) {
 
   return {
     cloudflareAccess,
+    teamAccessEnabled,
     stagingPublicPreview,
     siteHostingEnabled,
     siteDomain: siteHostingEnabled ? siteDomain : null,
