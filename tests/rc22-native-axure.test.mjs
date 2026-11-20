@@ -5,6 +5,7 @@ import { before, after, test } from "node:test";
 import { request } from "node:http";
 import { filesZip } from "./helpers/zipbuilder.mjs";
 import { startServer } from "./helpers/harness.mjs";
+import { loadConfig } from "../apps/api/lib/config.mjs";
 
 const SAFE_HOST="staging.arcunara.com";
 const NATIVE_HOST="axure-staging.arcunara.com";
@@ -141,4 +142,25 @@ test("HEAD on native share keeps same headers and no response body",async()=>{
   assert.equal(r.status,200);
   assert.equal(r.body,"");
   assert.match(r.headers["content-security-policy"],/unsafe-eval/);
+});
+
+test("configuration forbids using the admin hostname or a different admin port",()=>{
+  const env={
+    ARCU_TOKEN_FILE:server.tokenFile,
+    ARCU_ACCESS_ISSUER:"https://example.cloudflareaccess.com",
+    ARCU_ACCESS_AUDIENCE:"a".repeat(64),
+    ARCU_ACCESS_ADMIN_EMAIL:"admin@example.com",
+    ARCU_ACCESS_ORIGIN:"https://"+SAFE_HOST,
+    ARCU_STAGING_PUBLIC_PREVIEW:"1",
+    ARCU_PREVIEW_PUBLIC_BASE_URL:"https://"+SAFE_HOST,
+    ARCU_LOCAL_AUTO_LOGIN:"0"
+  };
+  for(const raw of ["https://"+SAFE_HOST, "https://"+SAFE_HOST+":8443"]) {
+    assert.throws(()=>loadConfig({
+      ...env,ARCU_AXURE_NATIVE_ORIGIN:raw
+    }),/distinct HTTPS host/);
+  }
+  assert.equal(loadConfig({
+    ...env,ARCU_AXURE_NATIVE_ORIGIN:"https://"+NATIVE_HOST
+  }).axureNativeOrigin,"https://"+NATIVE_HOST);
 });
