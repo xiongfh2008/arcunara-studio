@@ -171,7 +171,7 @@ export function renderNavPage(base, pages, { nativeOrigin = null } = {}) {
   const first = items.length > 0 ? items[0].href : "";
   // Only share-capability URLs may open the separate native origin. Never
   // export a bare UUID /p path or a native player on the admin hostname.
-  const nativeHref = nativeOrigin && /^\\/s\\/[0-9a-f]{16}\\.[A-Za-z0-9_-]{43}$/.test(base)
+  const nativeHref = nativeOrigin && /^\/s\/[0-9a-f]{16}\.[A-Za-z0-9_-]{43}$/.test(base)
     ? `${nativeOrigin}${base}/index.html`
     : null;
 
