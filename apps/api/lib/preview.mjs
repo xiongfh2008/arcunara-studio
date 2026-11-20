@@ -349,7 +349,8 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
               ...NAV_HEADERS,
               "Content-Security-Policy": NAV_HEADERS["Content-Security-Policy"]
                 .replace("sandbox allow-scripts;",
-                  "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox;")
+                  "sandbox allow-scripts allow-top-navigation-by-user-activation " +
+                    "allow-popups allow-popups-to-escape-sandbox;")
             }
           : NAV_HEADERS;
         res.writeHead(200, {
