@@ -2042,6 +2042,136 @@ $("assignMemberBtn").addEventListener("click",async()=>{
   finally{setBusy(btn,false);}
 });
 
+// RC20B: browser credentials are never stored in localStorage, URLs or
+// application state. Only an HttpOnly same-origin cookie holds the session.
+function memberAuthPanel(which) {
+  const panel=["login","activate","change"].includes(which)?which:"login";
+  document.querySelectorAll("[data-member-auth-tab]").forEach(button=>{
+    button.setAttribute("aria-selected",String(button.dataset.memberAuthTab===panel));
+  });
+  document.querySelectorAll("[data-member-auth-panel]").forEach(item=>{
+    item.classList.toggle("hidden",item.dataset.memberAuthPanel!==panel);
+  });
+  $("memberAuthStatus").textContent="";
+}
+function openMemberAuth(which="login") {
+  if(!window.__ARCU_MEMBER_LOGIN_ENABLED__)return;
+  memberAuthPanel(which);
+  if(!$("memberAccountDialog").open)$("memberAccountDialog").showModal();
+  (which==="activate"?$("memberInviteEmail"):
+    which==="change"?$("memberOldPassword"):$("memberLoginEmail")).focus();
+}
+function eraseMemberPasswords() {
+  for(const id of ["memberLoginPassword","memberSetPassword","memberOldPassword",
+    "memberNextPassword","memberInviteCode"])$(id).value="";
+}
+$("openMemberLoginBtn").addEventListener("click",()=>openMemberAuth());
+$("headerMemberLoginBtn").addEventListener("click",()=>openMemberAuth());
+$("changeMyPasswordBtn").addEventListener("click",()=>openMemberAuth("change"));
+$("headerMemberChangeBtn").addEventListener("click",()=>openMemberAuth("change"));
+$("closeMemberAccountDialog").addEventListener("click",()=>$("memberAccountDialog").close());
+$("memberAccountDialog").addEventListener("close",eraseMemberPasswords);
+document.querySelectorAll("[data-member-auth-tab]").forEach(button=>{
+  button.addEventListener("click",()=>memberAuthPanel(button.dataset.memberAuthTab));
+});
+async function memberCookieConnected() {
+  const me=await api("/api/me");
+  if(me.type!=="member")throw new Error("预期为成员身份");
+  applyPrincipal(me);
+  const limitsData=await api("/api/limits");
+  limits=limitsData.limits??null;
+  renderUploadQuotas();
+  await loadProjects();
+  setAuthorized(true);
+}
+$("submitMemberLogin").addEventListener("click",async()=>{
+  const btn=$("submitMemberLogin");
+  setBusy(btn,true,"登录中…");
+  try {
+    token=null;
+    // A prior administrator token is discarded, never sent to this endpoint.
+    await api("/api/auth/login",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({email:$("memberLoginEmail").value.trim(),
+        password:$("memberLoginPassword").value})
+    });
+    eraseMemberPasswords();
+    await memberCookieConnected();
+    $("memberAccountDialog").close();
+    feedback("成员已安全登录",true);
+  }catch(err){
+    $("memberAuthStatus").textContent="登录失败："+friendlyError(err);
+    eraseMemberPasswords();
+  }finally{setBusy(btn,false);}
+});
+$("submitMemberActivate").addEventListener("click",async()=>{
+  const btn=$("submitMemberActivate");
+  setBusy(btn,true,"激活中…");
+  try {
+    token=null;
+    await api("/api/auth/activate",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({email:$("memberInviteEmail").value.trim(),
+        code:$("memberInviteCode").value.trim(),password:$("memberSetPassword").value})
+    });
+    $("memberLoginEmail").value=$("memberInviteEmail").value.trim();
+    eraseMemberPasswords();
+    memberAuthPanel("login");
+    $("memberAuthStatus").textContent="已设置密码，请使用邮箱和密码登录。";
+  }catch(err){
+    $("memberAuthStatus").textContent="激活失败："+friendlyError(err);
+    eraseMemberPasswords();
+  }finally{setBusy(btn,false);}
+});
+async function memberLogout() {
+  try{await api("/api/auth/logout",{method:"POST"});}
+  catch(err){feedback("退出失败："+friendlyError(err),false);return;}
+  token=null;
+  setAuthorized(false);
+  eraseMemberPasswords();
+  feedback("已退出登录",true);
+}
+$("memberLogoutBtn").addEventListener("click",memberLogout);
+$("headerMemberLogoutBtn").addEventListener("click",memberLogout);
+$("submitMemberChangePassword").addEventListener("click",async()=>{
+  const btn=$("submitMemberChangePassword");
+  setBusy(btn,true,"修改中…");
+  try {
+    await api("/api/auth/change-password",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        oldPassword:$("memberOldPassword").value,
+        newPassword:$("memberNextPassword").value
+      })
+    });
+    token=null;
+    setAuthorized(false);
+    eraseMemberPasswords();
+    $("memberAccountDialog").close();
+    feedback("密码已修改，所有旧会话已失效，请重新登录",true);
+  }catch(err){
+    $("memberAuthStatus").textContent="修改密码失败："+friendlyError(err);
+    eraseMemberPasswords();
+  }finally{setBusy(btn,false);}
+});
+if(window.__ARCU_MEMBER_LOGIN_ENABLED__) {
+  $("openMemberLoginBtn").classList.remove("hidden");
+  $("headerMemberLoginBtn").classList.remove("hidden");
+}
+// Browser will send the same-origin HttpOnly cookie automatically. Failure
+// merely shows the login entry; it never grants administrator privileges.
+if(window.__ARCU_MEMBER_LOGIN_ENABLED__ &&
+   !window.__ARCU_LOCAL_AUTO_LOGIN__ && !window.__ARCU_ACCESS_AUTO_LOGIN__) {
+  (async()=>{
+    try{
+      await api("/api/auth/session");
+      await memberCookieConnected();
+    }catch{
+      $("headerMemberLoginBtn").classList.remove("hidden");
+    }
+  })();
+}
+
 function activateTab(tab) {
   const supported = ["overview", "versions", "shares", "deploy", "members"];
   activeTab = supported.includes(tab) ? tab : "versions";
