@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arcunara Studio · 内部工作台</title>
+<title>Arcunara Studio · 项目工作台</title>
 <style>
 :root{--bg:#f6f8fc;--panel:#fff;--panel2:#f3f6fb;--border:#e7ecf4;--text:#17243a;--muted:#7b889d;--accent:#2563eb;--accent2:#1d4ed8;--ok:#119c66;--err:#d83c4a;--warn:#b7812d;--radius:15px;--focus:#7da9ff}
 *{box-sizing:border-box}
@@ -238,6 +238,215 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
 .lifecycle-state{font-size:12px;color:var(--muted);margin:8px 0}
 @media(max-width:960px){.app-layout{grid-template-columns:66px minmax(0,1fr)}.side-nav{font-size:0;justify-content:center;padding:12px}.sidebar-bottom{display:none}.app-sidebar{padding:18px 8px}.project-filter{max-width:none}}
 @media(max-width:600px){.app-layout{grid-template-columns:minmax(0,1fr)}.app-sidebar{display:none}.workspace{padding:18px 12px}.shell-header{padding:0 14px}.project-top-actions{display:flex;flex-direction:column;align-items:stretch}.project-top-actions .workspace-actions{width:100%}.project-top-actions input.search,.project-filter{width:100%;max-width:100%}.content-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* RC19 — Unified workbench visual language.
+   Preserve all element IDs and API behaviors, override prior legacy styles. */
+:root {
+  color-scheme:light;
+  --bg:#f5f7fc;
+  --panel:#ffffff;
+  --panel2:#f8faff;
+  --border:#e3e8f2;
+  --text:#1a2740;
+  --muted:#66758e;
+  --accent:#4f5de8;
+  --accent2:#3d49c7;
+  --focus:#8fa1ff;
+  --ok:#159368;
+  --err:#c43f53;
+  --radius:16px;
+  --shadow-soft:0 12px 34px rgba(27,42,81,.045);
+}
+html,body{background:var(--bg);color:var(--text)}
+body{letter-spacing:.01em}
+button{border-radius:10px;min-height:38px;box-shadow:none}
+button:not(.ghost):not(.danger):not(.warn):not(.icon-action):not(.small-link):not(.side-nav):not(.portfolio-tile):not(.search-clear):not([data-upload-mode]):not([data-tab]){background:var(--accent)}
+button:not(.ghost):not(.danger):not(.warn):not(.icon-action):not(.small-link):not(.side-nav):not(.portfolio-tile):not(.search-clear):not([data-upload-mode]):not([data-tab]):hover{background:var(--accent2)}
+button.ghost{background:#fff;color:#354461;border-color:#d9e1f0}
+button.ghost:hover{background:#f5f7ff;border-color:#b6c5e9;color:var(--accent2)}
+button.danger{background:#fff;color:var(--err);border-color:#f1cdd6}
+button.danger:hover{background:#fff1f4}
+.shell-header{height:76px;background:#fff;padding:0 clamp(18px,2vw,34px);box-shadow:0 2px 12px rgba(26,39,64,.025);border-bottom:1px solid #e8ecf4;z-index:30}
+.brand{color:#202b4c;font-size:21px;gap:11px;letter-spacing:-.7px}
+.brand-mark{width:37px;height:41px;filter:drop-shadow(0 5px 8px rgba(79,93,232,.12))}
+.brand-subtitle{font-weight:500;color:#61708b;letter-spacing:-.45px}
+.connection-pill{border-color:#e2e8f2;background:#f8faff;padding:6px 8px 6px 13px}
+.connection-pill:hover{background:#eef2ff}
+.avatar{background:#e9edff;color:#4f5de8}
+.tokenbar{padding:13px clamp(18px,2vw,34px);background:#eef1ff;border-bottom:1px solid #dde4ff}
+.app-layout{grid-template-columns:226px minmax(0,1fr);min-height:calc(100vh - 76px)}
+.app-sidebar{background:#151e35;border-right:0;padding:26px 13px 24px;gap:18px}
+.app-sidebar nav::before{content:"WORKSPACE";display:block;font-size:10px;font-weight:800;letter-spacing:2px;color:#7684a6;margin:2px 12px 15px}
+.side-nav,.side-nav-current{display:flex;align-items:center;gap:13px;border-radius:11px;font-size:13px;padding:13px 16px;min-height:48px;font-weight:650;color:#aebbd7;background:transparent}
+.side-nav .ui-icon{width:19px;height:19px}
+.side-nav[aria-current="page"],.side-nav-current{color:#fff;background:linear-gradient(95deg,#4f60bb,#404c92);box-shadow:0 8px 20px #0a123038}
+.sidebar-bottom{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:18px 13px 5px;border-top:1px solid #ffffff20;color:#a6b3ce;line-height:1.6;margin-top:auto}
+.sidebar-bottom strong{color:#dfe6fa;font-size:12px}
+.sidebar-bottom span{font-size:11px}
+.sidebar-bottom small{font-size:10px;color:#8694b4;letter-spacing:.5px;margin-top:8px}
+.workspace{max-width:1780px;padding:35px clamp(18px,2.5vw,44px) 54px}
+.workspace-header{margin-bottom:22px;align-items:center}
+.workspace-eyebrow{font-size:10px;color:#5967c9;letter-spacing:2.1px;font-weight:800;margin-bottom:7px}
+.workspace-eyebrow span{color:#a3acc8;margin:0 6px}
+.workspace-header h1{font-size:30px;line-height:1.23;letter-spacing:-1px;font-weight:760;color:#192640}
+.workspace-header p{font-size:13px;margin-top:8px;color:#71809a}
+.workspace-help{display:flex;align-items:center;gap:8px;color:#64738c;font-size:12px;white-space:nowrap;background:#fff;border:1px solid var(--border);padding:9px 13px;border-radius:999px}
+.help-dot{display:block;width:7px;height:7px;border-radius:99px;background:#35b6a5;box-shadow:0 0 0 4px #dff6f0}
+.portfolio-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin-bottom:25px}
+.portfolio-tile{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:9px;padding:18px 20px 17px;min-width:0;min-height:122px;border:1px solid #e3e8f2;border-radius:16px;background:#fff;color:#1e2b46;box-shadow:var(--shadow-soft);font-weight:normal;transition:transform .14s,border-color .14s,box-shadow .14s}
+.portfolio-tile:hover:not(:disabled){background:#fff;border-color:#aebafa;box-shadow:0 16px 32px rgba(41,52,121,.095);transform:translateY(-2px)}
+.portfolio-tile:disabled{cursor:default;opacity:.75}
+.portfolio-tile[aria-pressed="true"]{background:linear-gradient(140deg,#fbfcff,#f0f2ff);border-color:#99a7f8;box-shadow:inset 3px 0 0 var(--accent),0 12px 28px #5767e510}
+.portfolio-label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#687792;font-size:12px;font-weight:650}
+.portfolio-label .ui-icon{width:18px;height:18px;color:#7484d8}
+.portfolio-value{font-size:29px;line-height:1.05;font-weight:770;letter-spacing:-.8px;color:#202c48;font-variant-numeric:tabular-nums}
+.portfolio-tile[aria-pressed="true"] .portfolio-value{color:var(--accent2)}
+.portfolio-tile small{font-size:11px;color:#8995a9;font-weight:400}
+.content-grid{grid-template-columns:minmax(0,1.5fr) minmax(365px,1fr);gap:20px}
+.project-top-actions{margin-bottom:16px;align-items:center;gap:12px}
+.project-top-actions .workspace-actions{gap:9px}
+.project-top-actions .workspace-actions button{min-height:41px}
+.project-search-controls{display:flex;align-items:center;gap:9px;flex:1;min-width:0;justify-content:flex-end}
+.search-field{display:flex;align-items:center;position:relative;min-width:175px;width:min(295px,100%);background:#fff;border:1px solid #d9e1ef;border-radius:10px;transition:border-color .15s,box-shadow .15s}
+.search-field:focus-within{border-color:#8fa1ff;box-shadow:0 0 0 3px #8fa1ff22}
+.search-field>.ui-icon{width:17px;height:17px;margin-left:11px;color:#8796ae}
+.search-field input.search{width:100%;border:0!important;background:transparent!important;box-shadow:none!important;outline:0!important;padding:9px 11px;font-size:12px;min-width:0}
+.search-field input.search::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.search-clear{min-height:25px!important;min-width:25px;padding:0 5px!important;border:0;background:transparent!important;color:#7b8ba6!important;font-size:20px;line-height:1;box-shadow:none}
+.search-clear:hover{color:#2b3c66!important;background:#eef2ff!important}
+.project-filter{width:auto;min-width:105px;max-width:130px;flex-shrink:0;height:41px;padding:9px 10px;background:#fff;border-color:#d9e1ef;font-size:12px}
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-soft)}
+.project-list-card{overflow:hidden}
+.list-toolbar{padding:18px 21px;border-bottom:1px solid #eef1f7}
+.list-toolbar h2{font-size:16px;color:#23314d;font-weight:750}
+.list-toolbar .count{display:inline-block;margin-left:7px;color:#77859a;font-size:11px}
+.project-table-head{background:#f8faff;color:#8590a3;font-size:11px;font-weight:650;letter-spacing:.2px}
+.project-table-head,ul.projects li.project-row{grid-template-columns:minmax(155px,1fr) 82px 64px 128px 70px}
+ul.projects li.project-row{min-height:70px;padding-top:12px;padding-bottom:12px;transition:background .15s,border-color .15s;border-left:3px solid transparent}
+ul.projects li.project-row:hover{background:#f8faff}
+ul.projects li.project-row.active{background:#eef1ff;border-left-color:var(--accent)}
+.project-cell-name .ui-icon{color:#7889dc;width:20px;height:20px}
+.project-name-button{font-size:13px;color:#273550;white-space:nowrap;text-overflow:ellipsis}
+.project-type{color:#5365a8;background:#edf0ff;border-radius:7px;padding:4px 6px}
+.project-version{color:#4a5878;font-size:12px}
+.project-date{color:#7f8ca3;font-size:11px}
+.status-chip{font-size:11px;padding:5px 9px;background:#e6f7f1;color:#0e8a67}
+.status-chip.off{background:#eef1f5;color:#75849b}
+.project-list-foot{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fbfcff;padding:14px 20px;font-size:11px;color:#8693a9}
+kbd{background:#fff;border:1px solid #dae1ee;border-bottom-width:2px;border-radius:5px;font-family:ui-monospace,Consolas,monospace;font-size:11px;padding:2px 6px;color:#58677e}
+.empty-projects{padding:52px 18px 58px;color:#7c8ca4;text-align:center}
+.empty-projects .empty-icon{margin:auto auto 15px;display:grid;place-items:center;width:55px;height:55px;background:#edf0ff;border-radius:16px;color:#5566ca}
+.empty-projects .empty-icon .ui-icon{width:27px;height:27px}
+.empty-projects h3{font-size:16px;color:#263653;margin:0 0 7px}
+.empty-projects p{font-size:12px;margin:0 0 15px;line-height:1.7;color:#7b8aa2}
+.empty-projects button{font-size:12px}
+.project-list-card.is-loading .project-table-head{opacity:.55}
+.project-list-card.is-loading #projectList{min-height:180px}
+.loading-row{height:58px;display:flex;align-items:center;gap:13px;padding:11px 20px}
+.loading-block{display:block;height:13px;border-radius:6px;background:linear-gradient(90deg,#eef1f7,#e1e7f2,#eef1f7);background-size:200% 100%;animation:arcu-shimmer 1.4s ease infinite}
+.loading-block:first-child{width:48%}.loading-block:last-child{width:19%;margin-left:auto}
+@keyframes arcu-shimmer{to{background-position:-200% 0}}
+.project-inspector{gap:14px}
+.project-inspector .card{border-color:#e3e8f2;box-shadow:var(--shadow-soft)}
+.project-title-line h2{color:#1d2b46;font-size:18px;font-weight:760}
+.project-title-line>.ui-icon{color:var(--accent)}
+.project-metadata{grid-template-columns:95px minmax(0,1fr);font-size:12px}
+.project-metadata dt{color:#8794a9}
+.project-metadata dd{color:#3e4c66}
+.project-metadata .preview-url{border-color:#dce4f4;background:#f7f8ff}
+.detail-actions{gap:7px}
+.detail-actions a{background:var(--accent);border-radius:10px}
+.detail-actions a:hover{background:var(--accent2)}
+.detail-actions button{border-radius:10px}
+.inspector-section{padding:18px 20px}
+.inspector-heading h3{font-size:13px;color:#273752}
+.inspector-heading h3 .ui-icon{color:#6574d4}
+.inspector-stats>div{background:#f4f6ff;border:1px solid #e9edff;padding:13px 15px}
+.inspector-stats strong{color:#233154}
+.inspector-command{border-color:#e2e6f3;background:#f7f8ff}
+.inspector-bottom{gap:14px}
+.inspector-bottom .inspector-section{padding:15px}
+.inspector-empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:58px 36px;text-align:center;min-height:290px;align-self:start;background:linear-gradient(150deg,#fff,#f8f9ff)}
+.inspector-empty.hidden{display:none}
+.inspector-empty-icon{display:grid;place-items:center;width:65px;height:65px;border-radius:20px;background:#ecefff;color:#5a68d9}
+.inspector-empty-icon .ui-icon{width:30px;height:30px}
+.inspector-empty h2{font-size:17px;margin:8px 0 0;color:#283654}
+.inspector-empty p{font-size:12px;color:#7c8ba2;line-height:1.8;max-width:260px;margin:0 0 7px}
+.inspector-empty button{font-size:12px}
+.create-dialog{border-color:#e0e5f1;box-shadow:0 35px 95px #19244238}
+.create-dialog-header{background:#fbfcff}
+.create-dialog-header h2{color:#22314c;font-weight:750}
+.create-dialog-content label.field span{font-weight:600;color:#65748d}
+.create-dialog-content input:focus-visible,.create-dialog-content textarea:focus-visible,.create-dialog-content select:focus-visible{border-color:#909bf6}
+#feedback{border-radius:12px;box-shadow:0 14px 40px #24345322}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible,.portfolio-tile:focus-visible{outline:3px solid #95a4ff;outline-offset:3px}
+@media(max-width:1450px){
+  .content-grid{grid-template-columns:minmax(0,1.25fr) minmax(335px,1fr);gap:16px}
+  .project-top-actions{flex-wrap:wrap}
+  .project-search-controls{justify-content:stretch;width:100%}
+  .search-field{width:auto;flex:1}
+}
+@media(max-width:1180px){
+  .app-layout{grid-template-columns:194px minmax(0,1fr)}
+  .app-sidebar{padding-left:10px;padding-right:10px}
+  .side-nav,.side-nav-current{font-size:12px;justify-content:flex-start}
+  .workspace{padding:25px 20px 44px}
+  .content-grid{grid-template-columns:minmax(0,1fr)}
+  .project-inspector{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .project-inspector>.detail-card{grid-row:span 2}
+  .inspector-bottom{grid-column:1/-1}
+  .portfolio-overview{gap:11px}
+  .portfolio-tile{padding:16px}
+}
+@media(max-width:820px){
+  .app-layout{display:block}
+  .app-sidebar{display:flex;padding:9px 18px;border:0;border-bottom:1px solid #242f49}
+  .app-sidebar nav::before{display:none}
+  .side-nav,.side-nav-current{margin:0;min-height:38px;padding:8px 12px}
+  .sidebar-bottom{display:none}
+  .workspace{padding:20px 16px 38px}
+  .portfolio-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .portfolio-tile{min-height:104px;padding:14px 16px}
+  .portfolio-value{font-size:26px}
+}
+@media(max-width:640px){
+  .shell-header{height:64px;padding:0 15px}
+  .brand{font-size:17px}
+  .brand-mark{width:32px;height:36px}
+  .connection-pill{padding:5px}
+  .avatar{width:26px;height:26px}
+  .tokenbar{padding:12px}
+  .workspace{padding:19px 13px 30px}
+  .workspace-header{gap:9px;margin-bottom:17px}
+  .workspace-header h1{font-size:25px}
+  .workspace-header p{font-size:12px}
+  .workspace-help{display:none}
+  .portfolio-overview{margin-bottom:18px}
+  .project-top-actions{gap:12px}
+  .project-top-actions .workspace-actions{width:100%;display:flex;flex-wrap:nowrap}
+  .project-top-actions .workspace-actions button{flex:1;font-size:12px;padding:9px 7px}
+  .project-search-controls{display:flex;gap:8px}
+  .search-field{min-width:0}
+  .project-filter{min-width:103px}
+  .project-table-head,ul.projects li.project-row{grid-template-columns:minmax(114px,1fr) 54px 72px;padding-left:12px;padding-right:12px;gap:7px}
+  .project-table-head span:nth-child(2),.project-table-head span:nth-child(4),ul.projects li.project-row .project-type,ul.projects li.project-row .project-date{display:none}
+  .project-table-head span:nth-child(3),.project-table-head span:nth-child(5){display:block}
+  ul.projects li.project-row{min-height:62px}
+  .project-list-foot{font-size:10px;padding:13px}
+  .keyboard-hint{display:none}
+  .project-inspector{grid-template-columns:minmax(0,1fr)}
+  .project-inspector>.detail-card{grid-row:auto}
+  .inspector-bottom{grid-column:auto;grid-template-columns:1fr}
+  .detail-header{padding:18px}
+  .detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .detail-actions a,.detail-actions button{justify-content:center}
+  .manage-dialog .detail-tabs{overflow-x:auto}
+  .manage-dialog .detail-panel{padding:13px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
 </style>
 </head>
 <body>
@@ -269,7 +478,7 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
 <header class="shell-header">
   <div class="brand">
     <svg class="brand-mark" viewBox="0 0 34 38" aria-hidden="true"><path d="M5 29 15 8c1.3-3 3.5-3 5 0l10 21c1.2 2.7-1.7 5.2-4.2 3.4l-8.1-6.7-8.1 6.7C7.1 34.3 3.8 31.7 5 29z" fill="#2563eb"/><path d="M16.8 11 9 28l8.2-5.8 6.7 5.6z" fill="#82bcff"/></svg>
-    <span>Arcunara Studio</span>
+    <span>Arcunara <span class="brand-subtitle">Studio</span></span>
   </div>
   <button type="button" id="connectionToggle" class="connection-pill" aria-controls="tokenbar" aria-expanded="true" title="设置 API 连接"><span id="authBadge">未连接</span><span class="avatar">A</span></button>
 </header>
@@ -287,29 +496,55 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
     <nav aria-label="工作台导航">
       <span class="side-nav side-nav-current" aria-current="page"><svg class="ui-icon"><use href="#ui-folder"/></svg>项目管理</span>
     </nav>
-    <div class="sidebar-bottom">Arcunara Studio<br>原型项目工作台</div>
+    <div class="sidebar-bottom"><strong>Arcunara Workspace</strong><span>从灵感原型到可分享的项目</span><small>RC19 · Workspace</small></div>
   </aside>
-  <main class="workspace">
+  <main class="workspace" id="mainContent">
+    <header class="workspace-header">
+      <div>
+        <div class="workspace-eyebrow">WORKSPACE <span aria-hidden="true">/</span> PROJECTS</div>
+        <h1 id="viewTitle">项目管理</h1>
+        <p id="viewSubtitle">集中管理原型、版本、分享和网站发布</p>
+      </div>
+      <div class="workspace-help"><span class="help-dot" aria-hidden="true"></span>原型工作台</div>
+    </header>
+    <section class="portfolio-overview" aria-label="项目状态概览" id="portfolioOverview">
+      <button type="button" class="portfolio-tile" data-portfolio-filter="all" aria-pressed="false" disabled>
+        <span class="portfolio-label">全部项目 <svg class="ui-icon" aria-hidden="true"><use href="#ui-folder"/></svg></span>
+        <strong id="metricAll" class="portfolio-value">—</strong><small>查看所有项目</small>
+      </button>
+      <button type="button" class="portfolio-tile" data-portfolio-filter="active" aria-pressed="true" disabled>
+        <span class="portfolio-label">进行中 <svg class="ui-icon" aria-hidden="true"><use href="#ui-rocket"/></svg></span>
+        <strong id="metricActive" class="portfolio-value">—</strong><small>可继续编辑和部署</small>
+      </button>
+      <button type="button" class="portfolio-tile" data-portfolio-filter="archived" aria-pressed="false" disabled>
+        <span class="portfolio-label">已归档 <svg class="ui-icon" aria-hidden="true"><use href="#ui-clock"/></svg></span>
+        <strong id="metricArchived" class="portfolio-value">—</strong><small>浏览历史项目</small>
+      </button>
+      <button type="button" class="portfolio-tile" data-portfolio-filter="trashed" aria-pressed="false" disabled>
+        <span class="portfolio-label">回收站 <svg class="ui-icon" aria-hidden="true"><use href="#ui-settings"/></svg></span>
+        <strong id="metricTrashed" class="portfolio-value">—</strong><small>恢复或永久删除</small>
+      </button>
+    </section>
     <div class="content-grid">
       <div class="project-main-col">
-        <header class="workspace-header">
-          <div><h1 id="viewTitle">项目管理</h1><p id="viewSubtitle">上传、管理和分享你的原型项目</p></div>
-        </header>
         <div class="project-top-actions">
           <div class="workspace-actions">
             <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
             <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
           </div>
-          <div class="row" style="justify-content:flex-end"><input type="search" id="projectSearch" class="search" placeholder="搜索项目名称 / ID" aria-label="搜索项目名称或 ID" autocomplete="off"><select id="lifecycleFilter" class="project-filter" aria-label="项目筛选"><option value="active">进行中</option><option value="archived">已归档</option><option value="trashed">回收站</option><option value="all">全部项目</option></select></div>
+          <div class="project-search-controls" role="search" aria-label="搜索和筛选原型项目">
+            <div class="search-field"><svg class="ui-icon" aria-hidden="true"><use href="#ui-search"/></svg><input type="search" id="projectSearch" class="search" placeholder="搜索名称或项目 ID" aria-label="搜索项目名称或 ID（快捷键 / 或 Ctrl+K）" autocomplete="off"><button type="button" class="search-clear hidden" id="clearProjectSearch" aria-label="清空项目搜索">×</button></div>
+            <select id="lifecycleFilter" class="project-filter" aria-label="项目状态筛选"><option value="active">进行中</option><option value="archived">已归档</option><option value="trashed">回收站</option><option value="all">全部项目</option></select>
+          </div>
         </div>
-        <section class="card project-list-card" aria-label="我的项目">
+        <section class="card project-list-card" id="projectListCard" aria-label="我的项目">
           <div class="list-toolbar">
-            <h2>我的项目 <span class="count" id="projectCount">0 个项目</span></h2>
+            <h2>我的项目 <span class="count" id="projectCount">—</span></h2>
             <button id="refreshBtn" class="icon-action" title="刷新项目列表" aria-label="刷新项目列表"><svg class="ui-icon"><use href="#ui-clock"/></svg></button>
           </div>
           <div class="project-table-head"><span>项目名称</span><span>类型</span><span>当前版本</span><span>更新时间</span><span>预览状态</span></div>
-          <ul class="projects" id="projectList"></ul>
-          <div class="project-list-foot">选择项目后，可在右侧管理预览、分享、版本与自动部署。</div>
+          <ul class="projects" id="projectList" aria-busy="false" aria-label="项目列表"></ul>
+          <div class="project-list-foot"><span id="projectListHint">选中项目后，在详情区继续管理版本、分享和部署。</span><span class="keyboard-hint">按 <kbd>/</kbd> 搜索</span></div>
         </section>
       </div>
       <aside id="detailCard" class="project-inspector hidden" aria-label="选中项目的功能管理">
@@ -364,6 +599,12 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
             <div class="inspector-keyline"><span>描述</span><strong id="settingsDesc">—</strong></div>
           </section>
         </div>
+      </aside>
+      <aside id="inspectorEmpty" class="inspector-empty card" aria-label="项目详情引导">
+        <div class="inspector-empty-icon"><svg class="ui-icon" aria-hidden="true"><use href="#ui-folder"/></svg></div>
+        <h2>选择一个项目</h2>
+        <p>查看原型预览、历史版本、分享链接、部署及 Axure 转换工具。</p>
+        <button type="button" id="emptyCreateBtn" class="ghost">创建第一个项目</button>
       </aside>
     </div>
   </main>
@@ -598,6 +839,9 @@ let activeTab = "versions";
 let activeModule = "projects";
 let versionUploadMode = "file";
 let feedbackTimer = null;
+let projectListLoaded = false;
+let projectListRequest = 0;
+let selectionRequest = 0;
 
 const FALLBACK_LIMITS = {
   maxZipBytes: 20 * 1024 * 1024,
@@ -744,14 +988,26 @@ function friendlyError(err) {
 
 // Busy-state helper: disables the button so the request cannot be
 // double-submitted, shows a stage hint instead of a fake progress bar.
+const busyButtonContent = new WeakMap();
 function setBusy(btn, busy, busyLabel) {
   if (busy) {
-    btn.dataset.label = btn.textContent;
+    // Preserve actual SVG nodes instead of losing icons to textContent.
+    if (!busyButtonContent.has(btn)) {
+      busyButtonContent.set(btn, Array.from(btn.childNodes, node => node.cloneNode(true)));
+      btn.dataset.label = btn.textContent;
+    }
+    btn.dataset.busyLabel = busyLabel;
     btn.textContent = busyLabel;
     btn.disabled = true;
     btn.setAttribute("aria-busy", "true");
   } else {
-    btn.textContent = btn.dataset.label ?? btn.textContent;
+    const previous = busyButtonContent.get(btn);
+    // Rendering may have already set a new state label while the request
+    // was running. Do not restore stale text over that new state.
+    if (previous && btn.textContent === btn.dataset.busyLabel) btn.replaceChildren(...previous);
+    else if (!previous) btn.textContent = btn.dataset.label ?? btn.textContent;
+    busyButtonContent.delete(btn);
+    delete btn.dataset.busyLabel;
     btn.disabled = false;
     btn.removeAttribute("aria-busy");
   }
@@ -764,16 +1020,121 @@ function setAuthorized(ok) {
       window.__ARCU_ACCESS_AUTO_LOGIN__ && !token ? "Access 已连接" : "已连接")
     : "连接 API";
   $("authBadge").style.color = ok ? "var(--ok)" : "var(--muted)";
+  $("connectionToggle").classList.toggle("connected", ok);
   $("tokenbar").classList.toggle("collapsed", ok);
   $("connectionToggle").setAttribute("aria-expanded", String(!ok));
   if (ok) $("tokenInput").value = "";
+  else if (projectListLoaded) {
+    // An expired or rejected authorization must not keep stale counts visible.
+    projects = [];
+    projectListLoaded = false;
+    resetSelectedProject();
+    $("projectList").textContent = "";
+    $("projectCount").textContent = "—";
+    $("projectListHint").textContent = "连接后加载项目列表";
+    renderPortfolioStats();
+  }
+}
+
+function renderPortfolioStats() {
+  const counts = {all:projects.length,active:0,archived:0,trashed:0};
+  for (const project of projects) {
+    const state = project.lifecycleState || "active";
+    if (Object.hasOwn(counts,state) && state !== "all") counts[state]++;
+  }
+  const lookup = {all:"metricAll",active:"metricActive",
+    archived:"metricArchived",trashed:"metricTrashed"};
+  const current = $("lifecycleFilter").value;
+  for (const [key,id] of Object.entries(lookup)) {
+    $(id).textContent = projectListLoaded ? String(counts[key]) : "—";
+  }
+  for (const button of document.querySelectorAll("[data-portfolio-filter]")) {
+    button.disabled = !projectListLoaded;
+    button.setAttribute("aria-pressed",
+      String(button.dataset.portfolioFilter === current));
+  }
+}
+
+function showInspectorEmpty() {
+  $("detailCard").classList.add("hidden");
+  $("inspectorEmpty").classList.remove("hidden");
+}
+
+function resetSelectedProject() {
+  ++selectionRequest;
+  selected = null;
+  versions = [];
+  shares = [];
+  deployKeys = [];
+  selectedVersion = null;
+  showInspectorEmpty();
+}
+
+function visibleProject(project) {
+  const filter = $("lifecycleFilter").value;
+  return projectMatches(project, $("projectSearch").value) &&
+    (filter === "all" || (project.lifecycleState || "active") === filter);
+}
+
+function renderListSkeleton() {
+  const list = $("projectList");
+  list.textContent = "";
+  $("projectCount").textContent = "加载中…";
+  $("projectListHint").textContent = "正在安全加载项目列表…";
+  $("projectListCard").classList.add("is-loading");
+  for (let i=0;i<3;i++) {
+    const row = document.createElement("li");
+    row.className = "loading-row";
+    row.setAttribute("aria-hidden","true");
+    for (let k=0;k<2;k++) {
+      const block = document.createElement("span");
+      block.className = "loading-block";
+      row.appendChild(block);
+    }
+    list.appendChild(row);
+  }
 }
 
 async function loadProjects() {
-  const data = await api("/api/projects");
-  projects = data.projects;
-  renderProjects();
-  if (!selected && projects.length) await selectProject(projects[0].id);
+  const request = ++projectListRequest;
+  const list = $("projectList");
+  const refresh = $("refreshBtn");
+  list.setAttribute("aria-busy","true");
+  refresh.disabled = true;
+  if (!projectListLoaded) renderListSkeleton();
+  try {
+    const data = await api("/api/projects");
+    if (request !== projectListRequest) return;
+    projects = Array.isArray(data.projects) ? data.projects : [];
+    projectListLoaded = true;
+    if (selected && !projects.some(p => p.id === selected.id)) {
+      resetSelectedProject();
+    }
+    renderProjects();
+    if (!selected) {
+      const preferred = projects.find(p => visibleProject(p));
+      if (preferred) await selectProject(preferred.id);
+      else showInspectorEmpty();
+    }
+  } catch (err) {
+    if (request === projectListRequest && !projectListLoaded) {
+      $("projectCount").textContent = "无法加载";
+      $("projectListHint").textContent = "连接失败，请检查授权后重试。";
+      $("projectListCard").classList.remove("is-loading");
+      list.textContent = "";
+      const item = document.createElement("li");
+      item.className = "empty-projects";
+      item.textContent = "项目列表加载失败，请检查连接后使用右上角刷新。";
+      list.appendChild(item);
+    }
+    throw err;
+  } finally {
+    if (request === projectListRequest) {
+      list.setAttribute("aria-busy","false");
+      $("projectListCard").classList.remove("is-loading");
+      refresh.disabled = false;
+    }
+  }
 }
 
 function projectMatches(p, query) {
@@ -795,18 +1156,52 @@ function makeIcon(symbol) {
 function renderProjects() {
   const list = $("projectList");
   list.textContent = "";
-  const query = $("projectSearch").value;
+  const query = $("projectSearch").value.trim();
   const lifecycle = $("lifecycleFilter").value;
-  const visible = projects.filter((p) =>
-    projectMatches(p, query) && (lifecycle === "all" || (p.lifecycleState || "active") === lifecycle)
-  );
-  $("projectCount").textContent = visible.length + " 个项目";
+  const visible = projects.filter(visibleProject);
+  $("projectCount").textContent = visible.length === projects.length
+    ? visible.length + " 个项目"
+    : visible.length + " / " + projects.length + " 个项目";
+  $("clearProjectSearch").classList.toggle("hidden", !query);
+  $("projectListHint").textContent = visible.length
+    ? "点击项目查看预览、版本、分享、部署与转换能力。"
+    : "可更改搜索条件或项目状态继续查找。";
+  renderPortfolioStats();
 
   if (!visible.length) {
-    const empty = document.createElement("li");
-    empty.className = "empty-projects";
-    empty.textContent = query ? "没有找到匹配的项目" : "暂无项目，点击“新建项目”开始";
-    list.appendChild(empty);
+    const messages = query
+      ? ["没有找到匹配的项目","试试其他项目名称或 ID，或清空搜索条件。","清空搜索"]
+      : lifecycle === "trashed"
+        ? ["回收站是空的","被删除的项目会先进入回收站，可以在这里恢复。","查看进行中"]
+        : lifecycle === "archived"
+          ? ["还没有归档项目","完成的项目可归档整理，随时恢复。","查看进行中"]
+          : ["暂无项目","创建 HTML 或 ZIP 原型项目，开始版本管理和分享。","新建项目"];
+    const item = document.createElement("li");
+    item.className = "empty-projects";
+    const icon = document.createElement("span");
+    icon.className = "empty-icon";
+    icon.appendChild(makeIcon("folder"));
+    const heading = document.createElement("h3");
+    heading.textContent = messages[0];
+    const description = document.createElement("p");
+    description.textContent = messages[1];
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "ghost";
+    action.textContent = messages[2];
+    action.addEventListener("click", () => {
+      if (query) {
+        $("projectSearch").value = "";
+        renderProjects();
+        $("projectSearch").focus();
+      } else if (lifecycle === "trashed" || lifecycle === "archived") {
+        applyProjectFilter("active");
+      } else {
+        $("openCreateDialog").click();
+      }
+    });
+    item.append(icon,heading,description,action);
+    list.appendChild(item);
     return;
   }
 
@@ -851,21 +1246,29 @@ function renderProjects() {
   }
 }
 async function selectProject(id) {
+  const request = ++selectionRequest;
   try {
-    selected = await api(`/api/projects/${id}`);
+    const [project, versionData, shareData, keyData] = await Promise.all([
+      api("/api/projects/" + id),
+      api("/api/projects/" + id + "/versions"),
+      api("/api/projects/" + id + "/shares"),
+      api("/api/projects/" + id + "/deploy-keys")
+    ]);
+    if (request !== selectionRequest) return;
+    selected = project;
+    versions = versionData.versions;
+    shares = shareData.shares;
+    deployKeys = keyData.deployKeys;
     generatedGithubWorkflow = null;
     $("githubWorkflowResult").classList.add("hidden");
-    versions = (await api(`/api/projects/${id}/versions`)).versions;
-    shares = (await api(`/api/projects/${id}/shares`)).shares;
-    deployKeys = (await api(`/api/projects/${id}/deploy-keys`)).deployKeys;
-    selectedVersion = versions.find((v) => v.isCurrent)?.version ?? null;
+    selectedVersion = versions.find(v => v.isCurrent)?.version ?? null;
+    $("inspectorEmpty").classList.add("hidden");
     renderDetail();
     renderProjects();
   } catch (err) {
-    feedback(`加载失败：${err.message}`, false);
+    if (request === selectionRequest) feedback("加载失败：" + friendlyError(err), false);
   }
 }
-
 function kv(label, value) {
   const dt = document.createElement("dt");
   dt.textContent = label;
@@ -1446,7 +1849,50 @@ $("refreshBtn").addEventListener("click", async () => {
   }
 });
 
-$("projectSearch").addEventListener("input", renderProjects);
+function applyProjectFilter(nextFilter) {
+  $("lifecycleFilter").value = nextFilter;
+  if (selected && !visibleProject(selected)) resetSelectedProject();
+  else if (!selected) ++selectionRequest; // cancel pending detail selection
+  renderProjects();
+}
+
+$("projectSearch").addEventListener("input", () => {
+  if (selected && !visibleProject(selected)) resetSelectedProject();
+  else if (!selected) ++selectionRequest; // prevent stale network responses
+  renderProjects();
+});
+$("clearProjectSearch").addEventListener("click", () => {
+  $("projectSearch").value = "";
+  renderProjects();
+  $("projectSearch").focus();
+});
+$("emptyCreateBtn").addEventListener("click", () => $("openCreateDialog").click());
+document.querySelectorAll("[data-portfolio-filter]").forEach(button => {
+  button.addEventListener("click", () => {
+    if (!projectListLoaded) return;
+    $("projectSearch").value = "";
+    applyProjectFilter(button.dataset.portfolioFilter);
+  });
+});
+document.addEventListener("keydown", event => {
+  const modalOpen = Boolean(document.querySelector("dialog[open]"));
+  if (modalOpen || event.altKey) return;
+  const field = document.activeElement;
+  const editing = field && (["INPUT","TEXTAREA","SELECT"].includes(field.tagName) ||
+    field.isContentEditable);
+  if (((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") ||
+      (event.key === "/" && !editing && !event.ctrlKey && !event.metaKey)) {
+    event.preventDefault();
+    $("projectSearch").focus();
+    $("projectSearch").select();
+  } else if (event.key === "Escape" && field === $("projectSearch") &&
+             $("projectSearch").value) {
+    $("projectSearch").value = "";
+    renderProjects();
+    event.preventDefault();
+  }
+});
+
 let generatedGithubWorkflow = null;
 $("generateGithubWorkflow").addEventListener("click", async () => {
   if (!selected) { feedback("请先选择项目", false); return; }
@@ -1569,7 +2015,7 @@ $("copyAxureReadinessBtn").addEventListener("click", async () => {
     feedback("无法自动复制，请手动选择报告内容", false);
   }
 });
-$("lifecycleFilter").addEventListener("change", renderProjects);
+$("lifecycleFilter").addEventListener("change", () => applyProjectFilter($("lifecycleFilter").value));
 
 async function changeLifecycle(state) {
   if (!selected) { feedback("请先选择项目", false); return; }
@@ -1616,7 +2062,7 @@ $("purgeProjectBtn").addEventListener("click", async () => {
     versions = [];
     shares = [];
     deployKeys = [];
-    $("detailCard").classList.add("hidden");
+    showInspectorEmpty();
     await loadProjects();
     feedback("项目已永久删除：" + name, true);
   } catch (err) {
