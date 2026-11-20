@@ -22,7 +22,7 @@ export function createAiGenerator(config,{fetcher=fetch,readSecret=fs.readFile}=
   function status(){
     const today=new Date().toISOString().slice(0,10);
     if(today!==day){day=today;usage=0;}
-    return {enabled,provider:enabled?"deepseek":null,model:enabled?"deepseek-chat":null,
+    return {enabled,provider:enabled?"deepseek":null,model:enabled?"deepseek-flash":null,
       remainingCalls:enabled?Math.max(0,DAILY_CALLS-usage):0,
       maxPromptChars:MAX_PROMPT_CHARS,maxHtmlBytes:MAX_HTML_BYTES};
   }
@@ -44,7 +44,7 @@ export function createAiGenerator(config,{fetcher=fetch,readSecret=fs.readFile}=
         method:"POST",redirect:"error",signal:AbortSignal.timeout(45000),
         headers:{"authorization":"Bearer "+key,"content-type":"application/json"},
         body:JSON.stringify({
-          model:"deepseek-chat",temperature:0.6,max_tokens:4096,stream:false,
+          model:"deepseek-flash",temperature:0.6,max_tokens:4096,stream:false,
           messages:[
             {role:"system",content:
               "Produce one complete self-contained HTML5 prototype only. Return raw HTML, not Markdown. "+
@@ -62,7 +62,7 @@ export function createAiGenerator(config,{fetcher=fetch,readSecret=fs.readFile}=
       let payload;
       try{payload=JSON.parse(raw);}catch{throw new ApiError(502,"Invalid AI response","AI_INVALID_RESPONSE");}
       const html=normalizeHtml(payload?.choices?.[0]?.message?.content);
-      return {html,model:"deepseek-chat",provider:"deepseek",
+      return {html,model:"deepseek-flash",provider:"deepseek",
         bytes:Buffer.byteLength(html,"utf8"),status:"draft",
         requiresReview:true,usedTokens:payload?.usage?.total_tokens??null};
     }catch(err){
