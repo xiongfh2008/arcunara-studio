@@ -3,6 +3,7 @@
 // semantic-contract check. No user data, no network, no .rp files.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { deflateSync, crc32 } from "node:zlib";
 import { convertIRToRP1 } from "../packages/rp-converter/rp1-bridge.mjs";
 
 if (process.argv.length !== 3) {
@@ -88,6 +89,25 @@ const fixtures = [
 ];
 
 await fs.mkdir(output,{recursive:true});
+
+// Real Zee-RP validates the existence of referenced images during "check".
+// Generate a self-contained original 1x1 red PNG (no network, no user media).
+const pngChunk = (type, bytes) => {
+  const tag = Buffer.from(type, "ascii");
+  const size = Buffer.alloc(4);
+  size.writeUInt32BE(bytes.length);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(Buffer.concat([tag, bytes])) >>> 0);
+  return Buffer.concat([size,tag,bytes,checksum]);
+};
+const png = Buffer.concat([
+  Buffer.from("89504e470d0a1a0a","hex"),
+  pngChunk("IHDR",Buffer.from([0,0,0,1, 0,0,0,1, 8,2,0,0,0])),
+  pngChunk("IDAT",deflateSync(Buffer.from([0,255,0,0]))),
+  pngChunk("IEND",Buffer.alloc(0))
+]);
+await fs.mkdir(path.join(output,"assets"),{recursive:true});
+await fs.writeFile(path.join(output,"assets","logo.png"),png,{flag:"wx"});
 const manifest = [];
 for (const fixture of fixtures) {
   const ir = {...base,pages:fixture.pages,summary:{...base.summary,pages:fixture.pages.length}};
