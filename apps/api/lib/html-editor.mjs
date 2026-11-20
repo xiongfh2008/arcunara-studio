@@ -38,6 +38,47 @@ async function assertRegularFile(base,rel) {
   return position;
 }
 
+async function assertSingleHtmlTree(root,expected,legacyRoot) {
+  const rootInfo=await fs.lstat(root);
+  if(!rootInfo.isDirectory()||rootInfo.isSymbolicLink()) {
+    throw new ApiError(409,"Unsafe version directory","EDITOR_UNSAFE_ENTRY");
+  }
+  const files=[];
+  async function walk(dir,prefix) {
+    const entries=await fs.readdir(dir,{withFileTypes:true});
+    for(const item of entries) {
+      // Legacy root keeps project administration files adjacent to index.html.
+      // They are metadata, not editable HTML assets, and must never be copied.
+      if(!prefix && legacyRoot && (
+          (item.name==="meta.json"&&item.isFile()) ||
+          (item.name==="versions"&&item.isDirectory())))continue;
+      if(!isValidSegment(item.name,{allowDotfiles:false})) {
+        throw new ApiError(409,"Unsafe project directory entry","EDITOR_UNSAFE_ENTRY");
+      }
+      if(item.isSymbolicLink()||(!item.isFile()&&!item.isDirectory())) {
+        throw new ApiError(409,"Unsafe project directory entry","EDITOR_UNSAFE_ENTRY");
+      }
+      const relative=prefix?prefix+"/"+item.name:item.name;
+      if(item.isDirectory()){
+        const before=files.length;
+        await walk(path.join(dir,item.name),relative);
+        if(files.length===before) {
+          throw new ApiError(409,"Project contains additional directories","EDITOR_MULTIFILE_UNSUPPORTED");
+        }
+      } else {
+        files.push(relative);
+        if(files.length>1) {
+          throw new ApiError(409,"Project has additional assets","EDITOR_MULTIFILE_UNSUPPORTED");
+        }
+      }
+    }
+  }
+  await walk(root,"");
+  if(files.length!==1||files[0]!==expected) {
+    throw new ApiError(409,"Project is not a single HTML file","EDITOR_MULTIFILE_UNSUPPORTED");
+  }
+}
+
 export async function readEditableHtml(store,id) {
   return store.withLock(id,async()=>{
     const meta=await store.readRawMeta(id);
@@ -53,6 +94,7 @@ export async function readEditableHtml(store,id) {
     }
     const filename=safeEntryPoint(current);
     const root=store.versionSourceDir(id,current);
+    await assertSingleHtmlTree(root,filename,current.storage==="legacy-root");
     let full;
     try { full=await assertRegularFile(root,filename); }
     catch(err) {
