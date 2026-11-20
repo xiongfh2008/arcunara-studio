@@ -86,6 +86,33 @@ const BASE_HEADERS = {
     "form-action 'self'"
 };
 
+// Opt-in Axure native-player responses. ONLY on a separate HTTPS origin.
+// The Axure player needs same-origin iframe access, storage, XHR and eval.
+// Keep these capabilities off staging/admin origin. All native paths require
+// a per-project /s/ capability; no API, unprotected /p or admin cookies.
+// Single-admin staging only; do not promise multi-tenant origin isolation.
+const NATIVE_HEADERS = {
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "SAMEORIGIN",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy":
+    "default-src 'self' data: blob:; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; " +
+    "style-src 'self' 'unsafe-inline' https:; " +
+    "img-src 'self' data: blob: https:; " +
+    "font-src 'self' data: https:; " +
+    "connect-src 'self'; " +
+    "frame-src 'self' blob:; " +
+    "media-src 'self' data: blob:; " +
+    "object-src 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self'; " +
+    "frame-ancestors 'self'"
+};
+
 // Platform-provided safe-preview navigation page for Axure exports. It is
 // PLATFORM UI but still served on the untrusted preview origin, so it is
 // sandboxed like every other preview document (opaque origin, no
@@ -155,6 +182,29 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
   const previewAccess = requirePreviewAccess
     ? createCloudflareAccessAuth(config)
     : null;
+  const nativeHost = config.axureNativeOrigin
+    ? new URL(config.axureNativeOrigin).host.toLowerCase()
+    : null;
+  const nativeAxureCache = new Map();
+  function isNativeHost(req) {
+    return nativeHost !== null &&
+      String(req.headers.host || "").toLowerCase() === nativeHost;
+  }
+  async function isNativeAxureProject(id) {
+    const meta = await store.readRawMeta(id);
+    if (!meta || meta.previewEnabled === false ||
+        meta.lifecycleState === "trashed") return false;
+    const entry = await store.currentVersionEntry(id, meta);
+    const sourceDir = store.versionSourceDir(id, entry);
+    if (!nativeAxureCache.has(sourceDir)) {
+      const info = await inspectAxureProject(sourceDir);
+      nativeAxureCache.set(sourceDir, info.isAxure && info.pages.length > 0);
+      if (nativeAxureCache.size > 128) {
+        nativeAxureCache.delete(nativeAxureCache.keys().next().value);
+      }
+    }
+    return nativeAxureCache.get(sourceDir) === true;
+  }
   async function lookupProjectDir(id) {
     const meta = await store.readRawMeta(id);
 
@@ -203,7 +253,7 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
     return { target, size: stat.size };
   }
 
-  async function serveFile(res, dir, segments, { headOnly = false } = {}) {
+  async function serveFile(res, dir, segments, { headOnly = false, nativeMode = false } = {}) {
     const mime = MIME_TYPES[extOf(segments[segments.length - 1])];
 
     if (!mime) {
@@ -217,7 +267,7 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
     }
 
     res.writeHead(200, {
-      ...BASE_HEADERS,
+      ...(nativeMode ? NATIVE_HEADERS : BASE_HEADERS),
       "Content-Type": mime,
       "Content-Length": file.size
     });
@@ -239,18 +289,18 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
     stream.pipe(res);
   }
 
-  async function serveEntry(res, basePath, dir, entryPoint, { headOnly = false }) {
+  async function serveEntry(res, basePath, dir, entryPoint, { headOnly = false, nativeMode = false }) {
     if (entryPoint !== "index.html") {
       return redirect(res, `${basePath}/${encodeURI(entryPoint)}`);
     }
 
-    return serveFile(res, dir, ["index.html"], { headOnly });
+    return serveFile(res, dir, ["index.html"], { headOnly, nativeMode });
   }
 
   // Shared serving core for /p/{id}/... and /s/{token}/...: resolves the
   // current version directory for `id`, serves the Axure nav page or the
   // requested file. All path-safety rules are identical on both routes.
-  async function serveProjectPath(res, id, basePath, rest, { headOnly = false, search = "" } = {}) {
+  async function serveProjectPath(res, id, basePath, rest, { headOnly = false, search = "", nativeMode = false } = {}) {
     const lifecycleMeta = await store.readRawMeta(id);
     if (!lifecycleMeta || lifecycleMeta.lifecycleState === "trashed") return notFound(res);
     const dir = await lookupProjectDir(id);
@@ -259,7 +309,15 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
       return notFound(res);
     }
 
-    if (rest === "/" || isAxurePlayerShellPath(rest)) {
+    if (nativeMode && rest === "/") {
+      const meta = await store.readRawMeta(id);
+      const entry = await store.currentVersionEntry(id, meta);
+      return serveEntry(res, basePath, dir, entry.entryPoint, {
+        headOnly, nativeMode: true
+      });
+    }
+
+    if (!nativeMode && (rest === "/" || isAxurePlayerShellPath(rest))) {
       const meta = await store.readRawMeta(id);
       const entry = await store.currentVersionEntry(id, meta);
       const sourceDir = store.versionSourceDir(id, entry);
@@ -281,7 +339,9 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
         if (rest !== "/") {
           return redirect(res, axurePlayerRedirect(basePath, axure.pages, search));
         }
-        const html = renderNavPage(basePath, axure.pages);
+        const html = renderNavPage(basePath, axure.pages, {
+          nativeOrigin: basePath.startsWith("/s/") ? config.axureNativeOrigin : null
+        });
         res.writeHead(200, {
           ...NAV_HEADERS,
           "Content-Length": Buffer.byteLength(html)
@@ -317,14 +377,14 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
       segments.push(segment);
     }
 
-    return await serveFile(res, dir, segments, { headOnly });
+    return await serveFile(res, dir, segments, { headOnly, nativeMode });
   }
 
   // Gated share access: validates the token against fresh meta on EVERY
   // request (entry page, HTML pages, and each static subresource). Any
   // failure is an indistinguishable 404. Root-document requests update the
   // lightweight access stats.
-  async function handleShareRequest(req, res, match, { headOnly }) {
+  async function handleShareRequest(req, res, match, { headOnly, nativeMode = false }) {
     const [, shareId, secret, rest] = match;
     const basePath = `/s/${shareId}.${secret}`;
 
@@ -344,9 +404,11 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
       try {
         const meta = await store.readRawMeta(ephemeral.projectId);
         if (!meta || meta.previewEnabled === false || meta.lifecycleState === "trashed") return notFound(res);
+        if (nativeMode && !(await isNativeAxureProject(ephemeral.projectId))) return notFound(res);
         return await serveProjectPath(
           res, ephemeral.projectId, basePath, rest, {
-            headOnly, search: new URL(req.url || "/", "http://localhost").search
+            headOnly, search: new URL(req.url || "/", "http://localhost").search,
+            nativeMode
           }
         );
       } catch (err) {
@@ -376,6 +438,15 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
       return notFound(res);
     }
 
+    if (nativeMode) {
+      try {
+        if (!(await isNativeAxureProject(verdict.projectId))) return notFound(res);
+      } catch (err) {
+        console.error("Native Axure inspection error:", err?.message ?? err);
+        return notFound(res);
+      }
+    }
+
     if (rest === "/" && req.method === "GET") {
       // One share visit = one root-document request. Iframe page navigations
       // and static assets are NOT counted (they use deeper paths).
@@ -386,7 +457,8 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
 
     try {
       return await serveProjectPath(res, verdict.projectId, basePath, rest, {
-        headOnly, search: new URL(req.url || "/", "http://localhost").search
+        headOnly, search: new URL(req.url || "/", "http://localhost").search,
+        nativeMode
       });
     } catch (err) {
       console.error("Share serve error:", err?.message ?? err);
@@ -407,14 +479,18 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
 
     const pathname = new URL(req.url || "/", "http://localhost").pathname;
 
+    const nativeMode = isNativeHost(req);
     const shareMatch = SHARE_RE.exec(pathname);
+
+    // Never expose /p/id, workbench or API routes on the native origin.
+    if (nativeMode && !shareMatch) return notFound(res);
 
     if (shareMatch) {
       if (method !== "GET") {
         return notFound(res);
       }
 
-      return await handleShareRequest(req, res, shareMatch, { headOnly });
+      return await handleShareRequest(req, res, shareMatch, { headOnly, nativeMode });
     }
 
     const match = PREVIEW_RE.exec(pathname);
