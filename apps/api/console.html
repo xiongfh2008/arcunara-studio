@@ -373,7 +373,8 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
   <div class="create-dialog-content"><p id="axureReadinessSummary" class="hint"></p>
     <p class="hint">评估结果仅用于识别页面、控件和交互风险；并非原生 Axure .rp 文件。可编辑 .rp 导出仍需原生编译器验证。</p>
     <pre id="axureReadinessJson" style="white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;background:var(--panel2);padding:14px;border:1px solid var(--border);border-radius:10px;font-size:12px"></pre>
-    <button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button>
+    <div class="row"><button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button><button type="button" id="downloadAxureIrBtn" class="ghost">下载可编辑控件映射 JSON</button></div>
+    <p class="hint">静态控件映射 JSON 不等于 .rp；其中的交互与布局仍需 Zee-RP 编译并在 Axure RP11 中验收。</p>
   </div>
 </dialog>
 <dialog class="create-dialog manage-dialog" id="manageDialog" aria-labelledby="manageDialogHeading">
@@ -1973,6 +1974,40 @@ if (window.__ARCU_LOCAL_AUTO_LOGIN__ || window.__ARCU_ACCESS_AUTO_LOGIN__) {
     }
   })();
 }
+
+$("downloadAxureIrBtn").addEventListener("click", async () => {
+  if (!selected) return;
+  const id = selected.id;
+  const version = selectedVersion || selected.currentVersion;
+  const btn = $("downloadAxureIrBtn");
+  if (btn.disabled) return;
+  setBusy(btn, true, "转换映射中…");
+  try {
+    const ir = await api("/api/projects/" + id + "/axure-ir?version=" + version);
+    if (ir.nativeRpExportReady !== false || ir.status !== "mapping-only") {
+      throw new Error("未知的转换结果类型，请停止下载");
+    }
+    const blob = new Blob([JSON.stringify(ir, null, 2)], { type: "application/json;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = "arcunara-" + id + "-v" + version + "-editable-ir.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(href), 1500);
+    }
+    feedback("已导出 " + ir.summary.pages + " 页 / " +
+      ir.summary.editableCandidates + " 个静态控件候选（JSON，非 .rp）", true);
+  } catch (err) {
+    feedback("控件映射失败：" + friendlyError(err), false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+
 </script>
 </body>
 </html>

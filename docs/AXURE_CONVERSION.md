@@ -17,6 +17,19 @@
 `D:\\AI\\zee-rp` 的 RP/1 编译和导出器，并进行 Axure RP11
 宿主读回验证；当前 GitHub 仓库没有该工具源代码或可执行依赖。
 
+## RC18A：静态可编辑控件候选中间模型（已开发）
+
+- 新增 GET /api/projects/{uuid}/axure-ir?version=N（省略 N 默认当前版本）。仅管理员，部署密钥拒绝访问；回收站项目拒绝分析。
+- packages/rp-converter/ir.mjs 生成 arcunara.editable-ir.v1：页面、文本、按钮、输入、图片及同项目导航候选、部分显式样式/尺寸。
+- 仅保留 HTML 内联明确设置的像素坐标/尺寸，不解析 CSS 样式表或推断 flex/grid 响应式几何；动态脚本和交互仅报告风险，不执行。
+- 单次限制 50 页、32 MiB HTML 总量、每页 8 MiB、每页 350 元件、总共 3000 元件；超限拒绝，不静默截断。
+- 工作台“Axure 转换评估”弹窗增加下载控件候选 JSON。该 JSON 不可直接用 Axure RP11 打开。
+- 原生 .rp 仍不可导出：status=mapping-only、nativeRpExportReady=false、compiler.available=false。
+
+### 下一阶段编译器接入
+
+把中间模型中的页面、文字、输入、图像和导航按 Zee-RP 的实际 schema 转成 RP/1，再调用可信编译器，并在真实 Axure RP11 中打开/选中/编辑完成验证。Zee-RP 位于用户 Windows 本地 D:\AI\zee-rp，当前 GitHub 仓库没有其源码或可调用二进制。无法在没有编译器的情况下真实验证 .rp，不做虚假输出。
+
 ## 原生导出器后续接入要求
 
 1. 定义可版本化的页面/元件/交互中间模型（节点 ID、几何、文本、样式、图片资源、事件条件）。
