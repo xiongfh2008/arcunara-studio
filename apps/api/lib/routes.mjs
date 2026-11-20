@@ -15,6 +15,7 @@ import { inspectAxureProject } from "./axure.mjs";
 import { analyzeAxureReadiness } from "./axure-readiness.mjs";
 import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { compareProjectVersions } from "./version-diff.mjs";
+import { exportProjectVersionZip } from "./zip-export.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
@@ -24,7 +25,62 @@ const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
-const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions$`);
+const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions// API router.
+//
+// v0.2.0 routes (/health, project list, JSON project creation, auth gate)
+// keep their validated behavior; everything else is additive v0.3.0.
+// Every failure path returns a JSON error with a stable "code" field
+// (see docs/development.md).
+
+import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
+import { parseMultipartUpload } from "./multipart.mjs";
+import { stageFromUpload } from "./staging.mjs";
+import { inspectAxureProject } from "./axure.mjs";
+import { analyzeAxureReadiness } from "./axure-readiness.mjs";
+import { generateGithubWorkflow } from "./github-workflow.mjs";
+import { compareProjectVersions } from "./version-diff.mjs";
+import { exportProjectVersionZip } from "./zip-export.mjs";
+import { parseDeployToken } from "./auth.mjs";
+import { createLocalSession } from "./local-session.mjs";
+import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
+
+const PROJECT_ID = "([0-9a-f-]{36})";
+const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
+const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
+const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
+const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
+);
+const VERSION_EXPORT_RE = new RegExp(`^/api/projects/${PROJECT_ID}/export// API router.
+//
+// v0.2.0 routes (/health, project list, JSON project creation, auth gate)
+// keep their validated behavior; everything else is additive v0.3.0.
+// Every failure path returns a JSON error with a stable "code" field
+// (see docs/development.md).
+
+import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { ApiError, sendError, sendJson, readBody } from "./httputil.mjs";
+import { parseMultipartUpload } from "./multipart.mjs";
+import { stageFromUpload } from "./staging.mjs";
+import { inspectAxureProject } from "./axure.mjs";
+import { analyzeAxureReadiness } from "./axure-readiness.mjs";
+import { generateGithubWorkflow } from "./github-workflow.mjs";
+import { compareProjectVersions } from "./version-diff.mjs";
+import { exportProjectVersionZip } from "./zip-export.mjs";
+import { parseDeployToken } from "./auth.mjs";
+import { createLocalSession } from "./local-session.mjs";
+import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
+
+const PROJECT_ID = "([0-9a-f-]{36})";
+const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
+const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
+const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
+const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
+);
 const VERSION_NOTE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions/([0-9]+)$`);
 const ROLLBACK_RE = new RegExp(`^/api/projects/${PROJECT_ID}/rollback$`);
 const SHARES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/shares$`);
@@ -239,6 +295,20 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         return sendJson(res, 200, await compareProjectVersions(
           store,diffMatch[1],Number(from),Number(to)
         ));
+      }
+
+      // RC17: administrator-only, read-only download. Deploy keys have no
+      // access because the allowlist intentionally excludes /export.
+      const exportMatch = VERSION_EXPORT_RE.exec(pathname);
+      if (exportMatch && req.method === "GET") {
+        const qs = new URL(req.url || "/", "http://localhost").searchParams;
+        const versions = qs.getAll("version");
+        if (versions.length > 1 || (versions.length === 1 &&
+            !/^[1-9][0-9]*$/.test(versions[0]))) {
+          throw new ApiError(400, "Invalid version", "INVALID_VERSION");
+        }
+        const v = versions.length ? Number(versions[0]) : null;
+        return await exportProjectVersionZip(store, exportMatch[1], v, res);
       }
 
       const rollbackMatch = ROLLBACK_RE.exec(pathname);
