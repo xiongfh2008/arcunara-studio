@@ -40,6 +40,9 @@ test("RC21C fixed HTTPS provider endpoint, secret from protected file and bounde
   assert.equal(requests.length,1);
   assert.equal(requests[0].url,"https://api.deepseek.com/chat/completions");
   assert.equal(requests[0].options.redirect,"error");
+  const sent=JSON.parse(requests[0].options.body);
+  assert.equal(sent.model,"deepseek-flash");
+  assert.equal(sent.thinking.type,"disabled");
   assert.match(requests[0].options.headers.authorization,/Bearer secret-credential-test/);
   assert.equal(requests[0].options.body.includes("secret-credential-test"),false);
   assert.equal(JSON.stringify(result).includes("secret-credential-test"),false);
