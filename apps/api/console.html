@@ -551,6 +551,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   window.__ARCU_ACCESS_AUTO_LOGIN__ = __ARCU_ACCESS_MODE_VALUE__;
   window.__ARCU_MEMBER_LOGIN_ENABLED__ = __ARCU_MEMBER_LOGIN_MODE_VALUE__;
   window.__ARCU_STAGING_PUBLIC_PREVIEW__ = __ARCU_PUBLIC_PREVIEW_MODE_VALUE__;
+  window.__ARCU_AXURE_NATIVE_ORIGIN__ = __ARCU_AXURE_NATIVE_ORIGIN_VALUE__;
   window.__ARCU_SITE_DOMAIN__ = __ARCU_SITE_DOMAIN_VALUE__;
 </script>
 <header class="shell-header">
@@ -642,6 +643,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
             </dl>
             <div class="detail-actions">
               <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
+              <button type="button" id="nativeAxurePreviewBtn" class="ghost hidden" title="原生 Axure，单独浏览器标签页运行">Axure 原生预览</button>
               <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
               <button type="button" id="openHtmlEditorBtn" class="ghost">在线编辑 HTML</button>
               <button type="button" id="openProjectFilesBtn" class="ghost">编辑项目文件</button>
@@ -1109,6 +1111,23 @@ async function usablePreviewUrl(id) {
   return shareUrlFor(ticket.token);
 }
 
+
+// Native Axure opens from the trusted workbench, outside the opaque-origin
+// sandbox. Only convert server-issued short-lived /s/ capabilities, never
+// user-supplied URLs or untrusted project identifiers into native links.
+function nativeAxurePreviewUrl(safeUrl) {
+  const origin = window.__ARCU_AXURE_NATIVE_ORIGIN__;
+  if (!origin || !window.__ARCU_STAGING_PUBLIC_PREVIEW__) {
+    throw new Error("Axure 原生预览尚未启用");
+  }
+  const parsed = new URL(safeUrl);
+  if (parsed.origin !== previewBase() ||
+      !/^\/s\/[0-9a-f]{16}\.[A-Za-z0-9_-]{43}\/$/.test(parsed.pathname) ||
+      parsed.search || parsed.hash) {
+    throw new Error("无效的预览链接");
+  }
+  return origin + parsed.pathname + "index.html";
+}
 
 // Share links: /s/{shareId}.{secret}/ — the token is part of the path so
 // every subresource request stays protected (relative URLs keep the prefix).
@@ -1618,6 +1637,9 @@ function renderDetail() {
   const link = $("previewLink");
   link.lastChild.textContent = selected.previewEnabled === false ? " 预览已停用" : " 预览";
   link.href = selected.previewEnabled === false ? "" : previewUrlFor(selected.id);
+  $("nativeAxurePreviewBtn").classList.toggle("hidden",
+    !window.__ARCU_AXURE_NATIVE_ORIGIN__ ||
+    !window.__ARCU_STAGING_PUBLIC_PREVIEW__ || selected.previewEnabled === false);
 
   const rows = $("versionRows");
   rows.textContent = "";
@@ -3001,6 +3023,23 @@ $("copyLink").addEventListener("click", async () => {
     }
   } catch (err) {
     feedback("获取安全预览链接失败：" + friendlyError(err), false);
+  }
+});
+
+$("nativeAxurePreviewBtn").addEventListener("click", async () => {
+  if (!selected || selected.previewEnabled === false ||
+      !window.__ARCU_AXURE_NATIVE_ORIGIN__) return;
+  // Create the tab DURING the user gesture, before awaiting the signed ticket.
+  const tab = window.open("about:blank", "_blank");
+  if (tab) tab.opener = null;
+  try {
+    const safeUrl = await usablePreviewUrl(selected.id);
+    const nativeUrl = nativeAxurePreviewUrl(safeUrl);
+    if (tab) tab.location.href = nativeUrl;
+    else window.prompt("复制并在新标签页打开 Axure 原生地址：", nativeUrl);
+  } catch (err) {
+    if (tab) tab.close();
+    feedback("打开 Axure 原生预览失败：" + friendlyError(err), false);
   }
 });
 

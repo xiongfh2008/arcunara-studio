@@ -107,7 +107,13 @@ test("safe workbench hostname keeps opaque sandbox and old link redirects",async
   assert.match(root.body,/安全预览/);
   assert.match(root.body,/id="nativeAxurePlayer"/);
   assert.match(root.body,new RegExp("https://"+NATIVE_HOST+"/s/"));
+  // A native-player link cannot rely on target=_blank: sandboxed documents
+  // may be prohibited from creating popups. Direct navigation must be valid.
+  assert.match(root.body,/id="nativeAxurePlayer"[^>]+target="_self"/);
   assert.match(root.headers["content-security-policy"],/sandbox allow-scripts/);
+  assert.match(root.headers["content-security-policy"],/allow-top-navigation-by-user-activation/);
+  assert.match(root.headers["content-security-policy"],/allow-popups-to-escape-sandbox/);
+  assert.doesNotMatch(root.headers["content-security-policy"],/allow-same-origin/);
   const player=await get(`/s/${shareToken}/index.html?p=page`,SAFE_HOST);
   assert.equal(player.status,302);
   assert.ok(player.headers.location.startsWith(`/s/${shareToken}/#`));
