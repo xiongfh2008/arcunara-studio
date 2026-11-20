@@ -72,6 +72,35 @@ function encodePreviewPath(base, page) {
   return `${base}/${page.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+/**
+ * Axure's native player uses same-origin iframe access, storage, and XHR,
+ * which the untrusted preview sandbox deliberately blocks. Redirect ONLY
+ * recognized Axure player shells to the platform navigation instead.
+ * Non-Axure index.html files are still served as normal HTML.
+ */
+export function isAxurePlayerShellPath(rest) {
+  return typeof rest === "string" &&
+    /^\\/[^/]+$/.test(rest) &&
+    AXURE_PLAYER_PAGES.has(rest.slice(1).toLowerCase());
+}
+
+/**
+ * Preserve Axure ?p=<page name> deep links without trusting arbitrary query
+ * data as a destination. Only a page present in the inspected business-page
+ * allowlist can be put into the navigation hash. If unknown, open the list.
+ */
+export function axurePlayerRedirect(base, pages, search = "") {
+  const requested = new URLSearchParams(search).get("p");
+  const matchingPage = typeof requested === "string" && requested.length <= 256
+    ? pages.find((page) =>
+        page === requested || page.replace(/\\.html?$/i, "") === requested
+      )
+    : null;
+  return matchingPage
+    ? `${base}/#${encodePreviewPath(base, matchingPage)}`
+    : `${base}/`;
+}
+
 // Resolves a location.hash fragment (without "#") to an index in the page
 // list. Exported AND embedded verbatim into the navigation page via
 // Function.prototype.toString(), so the unit-tested logic is exactly what
@@ -188,7 +217,6 @@ export function renderNavPage(base, pages) {
   <span class="tag" id="count"></span>
   <span class="spacer"></span>
   <a id="openStandalone" href="#" target="_blank" rel="noopener noreferrer">独立页面</a>
-  <a id="rawEntry" href="${base}/index.html">原始入口（index.html，调试用）</a>
 </header>
 <main>
   <nav aria-label="业务页面目录">
