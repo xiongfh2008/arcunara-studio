@@ -301,6 +301,15 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           return sendJson(res, 200, view);
         }
 
+        // RC16: admin-only irreversible removal, deliberately NOT allowed
+        // for project-scoped deploy keys (see deployKeyAllowed).
+        if (req.method === "DELETE") {
+          const payload = await readJsonPayload(req, config.limits);
+          return sendJson(res, 200, await store.permanentlyDeleteProject(
+            id, payload.confirmProjectId
+          ));
+        }
+
         // RC5: edit project name/description/previewEnabled. Additive and
         // idempotent; the project id and all stored data are unchanged.
         if (req.method === "PATCH") {
