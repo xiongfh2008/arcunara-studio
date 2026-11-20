@@ -3230,6 +3230,230 @@ $("publishHtmlEditorBtn").addEventListener("click",async()=>{
   }finally{setBusy(btn,false);}
 });
 
+
+// RC21B — editable HTML/CSS/JS file tree. All untrusted content is assigned
+// via .value, .textContent or a CSP-locked sandbox iframe, never innerHTML.
+let sourceSession=null;
+let sourceLoadRequest=0;
+const sourceBytes=text=>new TextEncoder().encode(text).byteLength;
+const draftFrameCsp="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; connect-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'\">";
+function sourceCanEdit(){
+  return sessionPrincipal.type!=="member" || selected?.role==="editor";
+}
+function sourceStatus(text){$("projectFilesStatus").textContent=text;}
+function sourceCurrentDraft(){
+  if(!sourceSession || !sourceSession.current)return;
+  if(!sourceCanEdit())return;
+  const path=sourceSession.current;
+  if(sourceSession.changes.get(path)?.remove)return;
+  const value=$("projectFilesSource").value;
+  const original=sourceSession.originals.get(path)??"";
+  if(value===original)sourceSession.changes.delete(path);
+  else sourceSession.changes.set(path,{path,content:value});
+}
+function sourceRenderTree(){
+  const list=$("projectFilesTree");list.textContent="";
+  if(!sourceSession)return;
+  for(const file of sourceSession.manifest.files){
+    const row=document.createElement("li");
+    const btn=document.createElement("button");
+    btn.type="button";
+    btn.textContent=file.path+(file.editable?"":" · 资源文件");
+    btn.disabled=!file.editable||sourceSession.changes.get(file.path)?.remove===true;
+    btn.setAttribute("aria-current",String(sourceSession.current===file.path));
+    btn.addEventListener("click",()=>sourceOpenFile(file.path));
+    row.appendChild(btn);list.appendChild(row);
+  }
+  for(const [path,change] of sourceSession.changes){
+    if(sourceSession.manifest.files.some(f=>f.path===path))continue;
+    if(change.remove)continue;
+    const li=document.createElement("li"),btn=document.createElement("button");
+    btn.type="button";btn.textContent=path+" · 新建";
+    btn.setAttribute("aria-current",String(sourceSession.current===path));
+    btn.addEventListener("click",()=>sourceOpenFile(path));
+    li.appendChild(btn);list.appendChild(li);
+  }
+  $("projectFilesBase").textContent="基线 v"+sourceSession.manifest.baseVersion+
+    " · 待保存 "+sourceSession.changes.size+" 项";
+  $("projectFilesByteCount").textContent=
+    sourceBytes($("projectFilesSource").value).toLocaleString()+" / 180,000 字节";
+  $("saveProjectFilesBtn").disabled=!sourceCanEdit()||sourceSession.changes.size===0||
+    sourceSession.changes.size>16 ||
+    [...sourceSession.changes.values()].some(c=>!c.remove&&sourceBytes(c.content)>180000);
+}
+async function sourceOpenFile(path){
+  if(!sourceSession)return;
+  sourceCurrentDraft();
+  const request=++sourceLoadRequest,session=sourceSession;
+  session.current=path;
+  $("projectFilesDiff").classList.add("hidden");
+  $("projectFilesPreview").classList.add("hidden");
+  const change=session.changes.get(path);
+  try{
+    if(!session.originals.has(path)){
+      if(!session.manifest.files.some(f=>f.path===path)){
+        session.originals.set(path,"");
+      }else{
+        const result=await api("/api/projects/"+session.projectId+
+          "/source/file?path="+encodeURIComponent(path));
+        if(sourceSession!==session||request!==sourceLoadRequest)return;
+        session.originals.set(path,result.content);
+      }
+    }
+    if(sourceSession!==session||request!==sourceLoadRequest)return;
+    $("projectFilesCurrent").textContent=path;
+    $("projectFilesSource").value=change?.remove?"":change?.content??session.originals.get(path)??"";
+    $("projectFilesSource").readOnly=!sourceCanEdit();
+    sourceRenderTree();
+  }catch(err){sourceStatus("文件读取失败："+friendlyError(err));}
+}
+function sourceClear(){
+  ++sourceLoadRequest;
+  $("projectFilesPreview").srcdoc="";
+  $("projectFilesSource").value="";
+  $("projectFilesDiff").textContent="";
+  sourceSession=null;
+}
+function sourceClose(force=false){
+  if(!force && sourceSession){
+    sourceCurrentDraft();
+    if(sourceSession.changes.size && !window.confirm(
+      "还有 "+sourceSession.changes.size+" 个文件的修改未保存，确定放弃？"))return;
+  }
+  $("projectFilesDialog").close();
+}
+$("openProjectFilesBtn").addEventListener("click",async()=>{
+  if(!selected){feedback("请先选择项目",false);return;}
+  const projectId=selected.id,btn=$("openProjectFilesBtn");
+  setBusy(btn,true,"加载项目文件…");
+  try{
+    const manifest=await api("/api/projects/"+projectId+"/source/files");
+    if(selected?.id!==projectId)return;
+    sourceSession={projectId,manifest,changes:new Map(),originals:new Map(),current:null};
+    $("projectFilesCurrent").textContent="选择可编辑的文本文件";
+    $("projectFilesSource").value="";
+    $("projectFilesSource").readOnly=!sourceCanEdit();
+    $("projectFilesStatus").textContent="保存为新版本不会自动发布公开网站。";
+    sourceRenderTree();
+    $("projectFilesDialog").showModal();
+    const first=manifest.files.find(f=>f.path===manifest.entryPoint&&f.editable)||
+      manifest.files.find(f=>f.editable);
+    if(first)await sourceOpenFile(first.path);
+  }catch(err){feedback("无法打开多文件编辑器："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+$("projectFilesSource").addEventListener("input",()=>{
+  sourceCurrentDraft();sourceRenderTree();
+});
+$("closeProjectFilesBtn").addEventListener("click",()=>sourceClose());
+$("cancelProjectFilesBtn").addEventListener("click",()=>sourceClose());
+$("projectFilesDialog").addEventListener("cancel",event=>{
+  sourceCurrentDraft();
+  if(sourceSession?.changes.size&&!window.confirm("草稿未保存，确定关闭？"))
+    event.preventDefault();
+});
+$("projectFilesDialog").addEventListener("close",sourceClear);
+$("projectFilesCreateBtn").addEventListener("click",async()=>{
+  if(!sourceSession||!sourceCanEdit())return;
+  sourceCurrentDraft();
+  const path=window.prompt("输入新文件路径（例如 assets/theme.css）");
+  if(!path)return;
+  if(sourceSession.manifest.files.some(f=>f.path.toLowerCase()===path.toLowerCase()) ||
+    sourceSession.changes.has(path)){
+    sourceStatus("该路径已存在。");return;
+  }
+  if(!/\.(html?|css|m?js|json|txt|md|svg)$/i.test(path)){
+    sourceStatus("只能新增受支持的 HTML/CSS/JS/JSON/TXT/MD/SVG 文本文件。");return;
+  }
+  sourceSession.changes.set(path,{path,content:""});
+  await sourceOpenFile(path);
+  sourceRenderTree();
+});
+$("projectFilesDeleteBtn").addEventListener("click",()=>{
+  if(!sourceSession||!sourceSession.current||!sourceCanEdit())return;
+  sourceCurrentDraft();
+  const path=sourceSession.current;
+  if(path===sourceSession.manifest.entryPoint){
+    sourceStatus("不能删除入口 HTML。");return;
+  }
+  if(!window.confirm("确定将 "+path+" 从下一个版本中移除？历史版本不会更改。"))return;
+  const existing=sourceSession.manifest.files.some(f=>f.path===path);
+  if(existing)sourceSession.changes.set(path,{path,remove:true});
+  else sourceSession.changes.delete(path);
+  sourceSession.current=null;
+  $("projectFilesCurrent").textContent="已标记删除；请保存为新版本";
+  $("projectFilesSource").value="";
+  sourceRenderTree();
+});
+$("projectFilesDiffBtn").addEventListener("click",()=>{
+  if(!sourceSession)return;
+  sourceCurrentDraft();sourceRenderTree();
+  const lines=[];
+  for(const change of sourceSession.changes.values()){
+    lines.push("### "+change.path);
+    if(change.remove){lines.push("将删除此文件");continue;}
+    const old=(sourceSession.originals.get(change.path)??"").split("\n");
+    const next=change.content.split("\n");
+    const count=Math.min(Math.max(old.length,next.length),120);
+    for(let i=0;i<count;i++){
+      if(old[i]!==next[i]){
+        if(i<old.length)lines.push("- "+String(i+1)+": "+old[i].slice(0,200));
+        if(i<next.length)lines.push("+ "+String(i+1)+": "+next[i].slice(0,200));
+      }
+    }
+    if(Math.max(old.length,next.length)>count)lines.push("…仅展示前 120 行差异，请以源码检查为准");
+  }
+  $("projectFilesDiff").textContent=lines.join("\n")||"当前没有待保存修改";
+  $("projectFilesDiff").classList.remove("hidden");
+  $("projectFilesPreview").classList.add("hidden");
+});
+$("projectFilesPreviewBtn").addEventListener("click",async()=>{
+  if(!sourceSession)return;
+  sourceCurrentDraft();
+  const session=sourceSession,path=session.manifest.entryPoint;
+  if(session.changes.get(path)?.remove)return;
+  try{
+    if(!session.originals.has(path)){
+      const file=await api("/api/projects/"+session.projectId+
+        "/source/file?path="+encodeURIComponent(path));
+      if(sourceSession!==session)return;
+      session.originals.set(path,file.content);
+    }
+    const html=session.changes.get(path)?.content??session.originals.get(path);
+    $("projectFilesPreview").srcdoc="<!doctype html>"+draftFrameCsp+html;
+    $("projectFilesPreview").classList.remove("hidden");
+    $("projectFilesDiff").classList.add("hidden");
+    sourceStatus("静态草稿预览：禁用 JS、网络请求及表单。外部 CSS/图片请保存后使用项目预览检查。");
+  }catch(err){sourceStatus("预览失败："+friendlyError(err));}
+});
+$("saveProjectFilesBtn").addEventListener("click",async()=>{
+  if(!sourceSession||!sourceCanEdit())return;
+  sourceCurrentDraft();sourceRenderTree();
+  const session=sourceSession,changes=[...session.changes.values()];
+  if(!changes.length){sourceStatus("没有待保存的修改");return;}
+  if(changes.length>16||changes.some(c=>!c.remove&&sourceBytes(c.content)>180000)){
+    sourceStatus("最多 16 个变更，且每个文件必须不超过 180000 字节");return;
+  }
+  const btn=$("saveProjectFilesBtn");setBusy(btn,true,"保存新版本…");
+  try{
+    const result=await api("/api/projects/"+session.projectId+"/source/publish",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({baseVersion:session.manifest.baseVersion,
+        baseRevision:session.manifest.baseRevision,changes})
+    });
+    sourceClose(true);
+    if(!result.unchanged){
+      await selectProject(session.projectId);await loadProjects();
+    }
+    feedback(result.unchanged?"内容未变化，未生成新版本":
+      "已保存为 v"+result.version+"，如需公开请另外点击“发布当前版本”。",true);
+  }catch(err){
+    sourceStatus(err?.json?.code==="EDITOR_VERSION_CONFLICT"
+      ?"版本已被其他人或 AI 工具更新，请先复制当前草稿，重新打开最新版本后再提交。"
+      :"保存失败："+friendlyError(err));
+  }finally{setBusy(btn,false);}
+});
+
 </script>
 </body>
 </html>
