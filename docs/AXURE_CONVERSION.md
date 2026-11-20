@@ -43,6 +43,15 @@
 
 具体 Windows 本地运行命令、资源保留方式及宿主验收要求请查看 `docs/ZEE_RP_BRIDGE.md`。
 
+## RC18C — 本地编译准备与引擎读回校验（已开发）
+
+- 本地 CLI 新增 `stage`，只复制 RP/1 JSON 及引用的图片，进行大小、符号链接、目录穿越和哈希检查，生成包含资源列表的 `manifest.json`。不复制上传的 JS、HTML 或隐藏文件。
+- `compile` 增加输入图片校验，并固定按 Zee-RP `check → generate → decompile` 执行。生成的 .rp 在独立临时目录完成引擎读回后，通过防覆盖拷贝到目标位置，并写出 `*.rp.verification.json` 校验报告。
+- 报告记录编译器名称/版本与 SHA-256、输出文件 SHA-256、图片 SHA-256，以及未完成的 Axure RP9/RP11 宿主操作检查项。
+- 回读失败、找不到图片、路径异常或目标已存在时拒绝发布，避免提供看似有效但无法读回的原生文件。
+- **验证分级**：本机 check+decompile 是 Zee-RP 自身的结构性检查，不代表 Axure 软件打开成功；未连接用户的 Windows Axure RP11，`nativeRp11Certified` 始终为 false。
+- 仍未添加 VPS/后端原生编译 Worker，也没有在 GitHub CI 中运行真实 Axure 或 Zee-RP 原生生成；CI 仅覆盖 Mock 编译器调用路径、错误保护与资源处理。
+
 ## 原生导出器后续接入要求
 
 1. 定义可版本化的页面/元件/交互中间模型（节点 ID、几何、文本、样式、图片资源、事件条件）。
