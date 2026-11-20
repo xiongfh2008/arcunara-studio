@@ -22,6 +22,7 @@ import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
 import { createTeamAccess, parseMemberToken, memberAction } from "./team-access.mjs";
+import { createMemberPasswords } from "./member-passwords.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
@@ -42,6 +43,7 @@ const SHARE_ACTION_RE = new RegExp(
 const USERS_RE = /^\/api\/users$/;
 const USER_RE = /^\/api\/users\/([0-9a-f]{16})$/;
 const USER_ROTATE_RE = /^\/api\/users\/([0-9a-f]{16})\/rotate-token$/;
+const USER_INVITE_RE = /^\/api\/users\/([0-9a-f]{16})\/invite$/;
 const MEMBERS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/members$`);
 const MEMBER_RE = new RegExp(`^/api/projects/${PROJECT_ID}/members/([0-9a-f]{16})$`);
 const DEPLOY_KEYS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/deploy-keys$`);
@@ -76,6 +78,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
   const localSession = createLocalSession(config);
   const cloudflareAccess = createCloudflareAccessAuth(config);
   const team = createTeamAccess(config, store);
+  const passwords=createMemberPasswords(config,store);
   // The internal workbench is static, contains no credentials and remains
   // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
@@ -107,6 +110,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       .replace("__ARCU_PREVIEW_BASE__", JSON.stringify(config.previewPublicBaseUrl))
       .replace("__ARCU_LOCAL_MODE_VALUE__", String(localSession.eligible(req)))
       .replace("__ARCU_ACCESS_MODE_VALUE__", String(cloudflareAccess.enabled))
+      .replace("__ARCU_MEMBER_LOGIN_MODE_VALUE__", String(passwords.enabled))
       .replace("__ARCU_PUBLIC_PREVIEW_MODE_VALUE__", String(config.stagingPublicPreview === true))
       .replace("__ARCU_SITE_DOMAIN_VALUE__", JSON.stringify(config.siteHostingEnabled ? config.siteDomain : null));
 
@@ -147,6 +151,52 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         (pathname === "/console" || pathname === "/console/")
       ) {
         return serveConsole(req, res);
+      }
+
+      // RC20B: invite-only member login. Anonymous requests are accepted only
+      // on these explicit routes and only after exact Origin + CSRF validation.
+      // No user signup, email dispatch or password recovery email is implied.
+      if(pathname.startsWith("/api/auth/")) {
+        if(!passwords.enabled)return sendJson(res,404,{error:"Not Found"});
+        if(req.method==="POST" && pathname==="/api/auth/login") {
+          passwords.checkRequest(req);
+          if(req.headers.authorization)
+            return sendJson(res,403,{error:"Forbidden",code:"MEMBER_CREDENTIAL_CONFLICT"});
+          const credentials=await readJsonPayload(req,config.limits);
+          const login=await passwords.login(credentials,req);
+          if(!login.ok)return sendJson(res,401,{error:"Invalid credentials",code:"MEMBER_LOGIN_INVALID"});
+          res.setHeader("Set-Cookie",login.cookie);
+          return sendJson(res,200,{type:"member",user:login.user});
+        }
+        if(req.method==="POST" && pathname==="/api/auth/activate") {
+          passwords.checkRequest(req);
+          if(req.headers.authorization)
+            return sendJson(res,403,{error:"Forbidden",code:"MEMBER_CREDENTIAL_CONFLICT"});
+          const value=await readJsonPayload(req,config.limits);
+          return sendJson(res,200,await passwords.activate(value));
+        }
+        const session=await passwords.authorizeSession(req);
+        if(req.method==="GET" && pathname==="/api/auth/session") {
+          if(!session)return sendJson(res,401,{error:"Unauthorized",code:"MEMBER_SESSION_INVALID"});
+          return sendJson(res,200,{type:"member",user:session.user});
+        }
+        if(req.method==="POST" && pathname==="/api/auth/logout") {
+          passwords.checkRequest(req);
+          if(!session)return sendJson(res,401,{error:"Unauthorized",code:"MEMBER_SESSION_INVALID"});
+          await passwords.logout(req);
+          res.setHeader("Set-Cookie",passwords.clearCookie(req));
+          return sendJson(res,200,{loggedOut:true});
+        }
+        if(req.method==="POST" && pathname==="/api/auth/change-password") {
+          passwords.checkRequest(req);
+          if(!session)return sendJson(res,401,{error:"Unauthorized",code:"MEMBER_SESSION_INVALID"});
+          const value=await readJsonPayload(req,config.limits);
+          const changed=await passwords.changePassword(
+            session.user.id,value.oldPassword,value.newPassword);
+          res.setHeader("Set-Cookie",passwords.clearCookie(req));
+          return sendJson(res,200,changed);
+        }
+        return sendJson(res,404,{error:"Not Found"});
       }
 
       // RC6: deploy-key mode. The dpk_ prefix routes to the restricted
@@ -195,6 +245,10 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           return sendJson(res, 401, {error:"Unauthorized",code:"TEAM_TOKEN_INVALID"});
         }
         req.teamMember = user;
+      } else if (!req.headers.authorization &&
+          (req.memberSession=await passwords.authorizeSession(req))) {
+        // Member session is distinct from global administrator identity.
+        req.teamMember=req.memberSession.user;
       } else if (
         !pathname.startsWith("/api/") ||
         (!auth(req) && !localSession.authorized(req) &&
@@ -254,6 +308,14 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       if (userMatch && req.method === "PATCH") {
         const payload=await readJsonPayload(req,config.limits);
         return sendJson(res,200,await team.editUser(userMatch[1],payload));
+      }
+      if(req.method==="GET" && pathname==="/api/audit/auth") {
+        if(!passwords.enabled)return sendJson(res,404,{error:"Not Found"});
+        return sendJson(res,200,{events:await passwords.logs()});
+      }
+      const inviteMatch=USER_INVITE_RE.exec(pathname);
+      if(inviteMatch && req.method==="POST") {
+        return sendJson(res,201,await passwords.issueInvite(inviteMatch[1]));
       }
       const rotateMatch=USER_ROTATE_RE.exec(pathname);
       if (rotateMatch && req.method === "POST") {
