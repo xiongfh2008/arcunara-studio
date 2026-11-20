@@ -21,6 +21,7 @@ import { exportProjectVersionZip } from "./zip-export.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
+import { createTeamAccess, parseMemberToken, memberAction } from "./team-access.mjs";
 
 const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
@@ -38,6 +39,11 @@ const PREVIEW_TICKET_RE = new RegExp(`^/api/projects/${PROJECT_ID}/preview-ticke
 const SHARE_ACTION_RE = new RegExp(
   `^/api/projects/${PROJECT_ID}/shares/([0-9a-f]{16})/(revoke|enable|disable)$`
 );
+const USERS_RE = /^\/api\/users$/;
+const USER_RE = /^\/api\/users\/([0-9a-f]{16})$/;
+const USER_ROTATE_RE = /^\/api\/users\/([0-9a-f]{16})\/rotate-token$/;
+const MEMBERS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/members$`);
+const MEMBER_RE = new RegExp(`^/api/projects/${PROJECT_ID}/members/([0-9a-f]{16})$`);
 const DEPLOY_KEYS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/deploy-keys$`);
 const DEPLOY_KEY_ACTION_RE = new RegExp(
   `^/api/projects/${PROJECT_ID}/deploy-keys/([0-9a-f]{16})/(revoke|enable|disable)$`
@@ -69,6 +75,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
   // short-lived browser cookie. The admin bearer token is never exposed.
   const localSession = createLocalSession(config);
   const cloudflareAccess = createCloudflareAccessAuth(config);
+  const team = createTeamAccess(config, store);
   // The internal workbench is static, contains no credentials and remains
   // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
@@ -179,12 +186,94 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         }
 
         req.deployKey = { projectId: verdict.projectId, keyId: verdict.key.id };
+      } else if ((req.headers.authorization || "").startsWith("Bearer uat_")) {
+        // A user token cannot fall through to an administrator browser cookie,
+        // even if malformed, disabled, or revoked.
+        const parsed = parseMemberToken(req.headers.authorization);
+        const user = parsed && await team.authorize(parsed.id, parsed.secret);
+        if (!user) {
+          return sendJson(res, 401, {error:"Unauthorized",code:"TEAM_TOKEN_INVALID"});
+        }
+        req.teamMember = user;
       } else if (
         !pathname.startsWith("/api/") ||
         (!auth(req) && !localSession.authorized(req) &&
           !(await cloudflareAccess.authorized(req)))
       ) {
         return sendJson(res, 401, { error: "Unauthorized" });
+      }
+
+      if (req.teamMember) {
+        const publicMemberPaths = pathname === "/api/limits" ||
+          pathname === "/api/projects" || pathname === "/api/me";
+        if (!(publicMemberPaths && req.method === "GET")) {
+          const match = /^\/api\/projects\/([0-9a-f-]{36})(?:\/|$)/.exec(pathname);
+          if (!match) {
+            return sendJson(res,403,{error:"Forbidden",code:"TEAM_FORBIDDEN"});
+          }
+          const projectRole = await team.role(match[1],req.teamMember.id);
+          if (!projectRole) {
+            return sendJson(res,404,{error:"Not Found",code:"PROJECT_NOT_FOUND"});
+          }
+          // Hide missing or trashed projects, regardless of whether the
+          // provided member token previously had access to them.
+          const meta = await store.readRawMeta(match[1]);
+          if (!meta || meta.lifecycleState === "trashed") {
+            return sendJson(res,404,{error:"Not Found",code:"PROJECT_NOT_FOUND"});
+          }
+          if (!memberAction(req.method,pathname,projectRole)) {
+            return sendJson(res,403,{error:"Forbidden",code:"TEAM_FORBIDDEN"});
+          }
+          req.teamRole = projectRole;
+        }
+      }
+
+      if (req.method === "GET" && pathname === "/api/me") {
+        if (req.deployKey) {
+          return sendJson(res,403,{error:"Forbidden",code:"DEPLOY_KEY_FORBIDDEN"});
+        }
+        return sendJson(res,200,req.teamMember
+          ? {type:"member",user:req.teamMember,
+              memberships:await team.membershipsForUser(req.teamMember.id)}
+          : {type:"admin"});
+      }
+
+      // Team registry management requires the existing global administrator
+      // identity. Member roles never include user or membership administration.
+      if (USERS_RE.test(pathname)) {
+        if (!team.enabled) return sendJson(res,404,{error:"Not Found"});
+        if (req.method === "GET") {
+          return sendJson(res,200,{users:await team.listUsers()});
+        }
+        if (req.method === "POST") {
+          const payload=await readJsonPayload(req,config.limits);
+          return sendJson(res,201,await team.createUser(payload));
+        }
+      }
+      const userMatch=USER_RE.exec(pathname);
+      if (userMatch && req.method === "PATCH") {
+        const payload=await readJsonPayload(req,config.limits);
+        return sendJson(res,200,await team.editUser(userMatch[1],payload));
+      }
+      const rotateMatch=USER_ROTATE_RE.exec(pathname);
+      if (rotateMatch && req.method === "POST") {
+        return sendJson(res,200,await team.rotateToken(rotateMatch[1]));
+      }
+      const membersMatch=MEMBERS_RE.exec(pathname);
+      if (membersMatch && req.method === "GET") {
+        return sendJson(res,200,{
+          projectId:membersMatch[1],
+          members:await team.members(membersMatch[1])
+        });
+      }
+      const memberMatch=MEMBER_RE.exec(pathname);
+      if (memberMatch && req.method === "PUT") {
+        const payload=await readJsonPayload(req,config.limits);
+        return sendJson(res,200,await team.setMember(
+          memberMatch[1],memberMatch[2],payload.role));
+      }
+      if (memberMatch && req.method === "DELETE") {
+        return sendJson(res,200,await team.removeMember(memberMatch[1],memberMatch[2]));
       }
 
       if (req.method === "GET" && pathname === "/api/limits") {
@@ -195,7 +284,9 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       }
 
       if (req.method === "GET" && pathname === "/api/projects") {
-        const projects = await store.listProjects();
+        const projects = req.teamMember
+          ? await team.projectsForUser(req.teamMember.id)
+          : await store.listProjects();
         return sendJson(res, 200, { projects });
       }
 
@@ -334,6 +425,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
 
         if (req.method === "GET") {
           const view = await store.getProject(id);
+          if (req.teamMember) view.role = req.teamRole;
 
           // Additive RC3 field: the workbench labels Axure projects with the
           // safe-preview entry (page directory) instead of the raw player.
