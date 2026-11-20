@@ -107,6 +107,13 @@ test("RC21A never flattens multi-file ZIP or leaks metadata and supports legacy-
     await fs.writeFile(path.join(root,"index.html"),html);
     const meta={id,name:"Legacy",createdAt:new Date().toISOString(),secret:"never-copy"};
     await fs.writeFile(path.join(root,"meta.json"),JSON.stringify(meta));
+    // Legacy metadata reports fileCount=1 even if assets exist on disk;
+    // editor must inspect the actual tree instead of silently dropping CSS.
+    await fs.writeFile(path.join(root,"additional.css"),"body{color:red}");
+    const unsafeLegacy=await app.api("/api/projects/"+id+"/html-editor");
+    assert.equal(unsafeLegacy.status,409);
+    assert.equal(unsafeLegacy.json.code,"EDITOR_MULTIFILE_UNSUPPORTED");
+    await fs.rm(path.join(root,"additional.css"));
     const first=await app.api("/api/projects/"+id+"/html-editor");
     assert.equal(first.status,200,JSON.stringify(first.json));
     assert.equal(first.json.html,html);
