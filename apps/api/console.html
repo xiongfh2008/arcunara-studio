@@ -521,7 +521,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 #aiGeneratedHtml{width:100%;height:180px;font:12px/1.5 ui-monospace,Consolas,monospace}
 #aiPrompt{min-height:110px}
 .rc21-ai-dialog #aiGeneratedResult{margin-top:12px}
-.member-mode #openAiGenerateBtn{display:none!important}
+.member-mode #openAiGenerateBtn,.member-mode #republishCurrentBtn{display:none!important}
 .viewer-mode #saveProjectFilesBtn,.viewer-mode #projectFilesCreateBtn,.viewer-mode #projectFilesDeleteBtn{display:none!important}
 @media(max-width:760px){.rc21-files-layout{grid-template-columns:1fr}.rc21-file-tree{max-height:160px}#projectFilesSource{height:300px;min-height:240px}}
 </style>
@@ -663,7 +663,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 正式网站发布</h3><span id="siteHostingState" class="status-chip off">未发布</span></div>
           <div class="inspector-keyline"><span>独立站点链接</span><a id="siteHostingUrl" href="" target="_blank" rel="noopener noreferrer" style="overflow-wrap:anywhere;font-size:12px">未发布</a></div>
           <p id="siteHostingHint" class="hint">静态网站独立域名托管与原型预览分离；需要管理员明确发布。</p>
-          <button type="button" id="siteHostingToggle" class="ghost">发布静态网站</button>
+          <button type="button" id="siteHostingToggle" class="ghost">发布静态网站</button><button type="button" id="republishCurrentBtn" class="ghost hidden">发布当前版本</button>
         </section>
         <section class="card inspector-section" id="deployOverviewCard">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 自动部署</h3><button type="button" id="openDeployPanel" class="small-link">配置部署 ›</button></div>
@@ -1568,8 +1568,9 @@ function renderDetail() {
   $("siteHostingUrl").href = sitePublished ? selected.siteUrl : "";
   $("siteHostingToggle").disabled = !siteAvailable || selected.lifecycleState === "trashed";
   $("siteHostingToggle").textContent = sitePublished ? "停止发布" : "发布静态网站";
+  $("republishCurrentBtn").classList.toggle("hidden",!sitePublished||!selected.hasUnpublishedChanges||sessionPrincipal.type==="member");
   $("siteHostingHint").textContent = siteAvailable
-    ? "当前项目使用独立子域名。网站 JS 可运行；发布会向持有地址的访客公开内容。停止发布后立即返回 404。"
+    ? (sitePublished ? "已公开 v"+selected.siteVersion+"；当前草稿 v"+selected.currentVersion+(selected.hasUnpublishedChanges?" 尚未发布。":" 与已发布一致。")+" 网站不会因保存版本而自动更新。" : "站点尚未发布，确认后将当前版本发布到独立域名。")
     : "尚未配置独立站点运行域名；预览功能保持不变。";
   const lc = selected.lifecycleState || "active";
   const lcNames = { active: "进行中", archived: "已归档", trashed: "回收站" };
