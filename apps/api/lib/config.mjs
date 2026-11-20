@@ -196,6 +196,9 @@ export function loadConfig(env = process.env) {
     throw new Error("ARCU_AI_ENABLED must be 0 or 1");
   const aiGenerationEnabled=aiFlag==="1";
   const aiApiKeyFile=(env.ARCU_AI_API_KEY_FILE||"").trim();
+  if(aiGenerationEnabled && aiApiKeyFile===tokenFile) {
+    throw new Error("AI provider key must be separate from API administrator token");
+  }
   if(aiGenerationEnabled && (!aiApiKeyFile.startsWith("/") ||
       aiApiKeyFile.includes("\0"))) {
     throw new Error("AI generation needs absolute ARCU_AI_API_KEY_FILE");
