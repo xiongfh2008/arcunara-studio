@@ -3238,7 +3238,8 @@ let sourceLoadRequest=0;
 const sourceBytes=text=>new TextEncoder().encode(text).byteLength;
 const draftFrameCsp="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; connect-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'\">";
 function sourceCanEdit(){
-  return sessionPrincipal.type!=="member" || selected?.role==="editor";
+  return !!sourceSession && selected?.id===sourceSession.projectId &&
+    (sessionPrincipal.type!=="member" || selected?.role==="editor");
 }
 function sourceStatus(text){$("projectFilesStatus").textContent=text;}
 function sourceCurrentDraft(){
@@ -3285,7 +3286,10 @@ async function sourceOpenFile(path){
   if(!sourceSession)return;
   sourceCurrentDraft();
   const request=++sourceLoadRequest,session=sourceSession;
-  session.current=path;
+  session.current=null; // do not treat stale textarea as the not-yet-loaded file
+  $("projectFilesCurrent").textContent="读取 "+path+"…";
+  $("projectFilesSource").value="";
+  $("projectFilesSource").readOnly=true;
   $("projectFilesDiff").classList.add("hidden");
   $("projectFilesPreview").classList.add("hidden");
   const change=session.changes.get(path);
@@ -3301,6 +3305,7 @@ async function sourceOpenFile(path){
       }
     }
     if(sourceSession!==session||request!==sourceLoadRequest)return;
+    session.current=path;
     $("projectFilesCurrent").textContent=path;
     $("projectFilesSource").value=change?.remove?"":change?.content??session.originals.get(path)??"";
     $("projectFilesSource").readOnly=!sourceCanEdit();
