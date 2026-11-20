@@ -169,11 +169,12 @@ export function loadConfig(env = process.env) {
     catch { throw new Error("Invalid ARCU_AXURE_NATIVE_ORIGIN"); }
     if (u.protocol !== "https:" || u.origin !== nativeRaw ||
         u.username || u.password || u.search || u.hash ||
-        u.pathname !== "/" || u.hostname === "localhost" ||
-        !u.hostname.includes(".") ||
+        u.pathname !== "/" || u.port !== "" ||
+        u.hostname === "localhost" || !u.hostname.includes(".") ||
         !stagingPublicPreview || !cloudflareAccess ||
-        u.origin === cloudflareAccess.origin ||
-        u.origin === previewPublicBaseUrl) {
+        u.hostname === new URL(cloudflareAccess.origin).hostname ||
+        (previewPublicBaseUrl &&
+          u.hostname === new URL(previewPublicBaseUrl).hostname)) {
       throw new Error("ARCU_AXURE_NATIVE_ORIGIN requires a distinct HTTPS host and Cloudflare Access staging preview");
     }
     axureNativeOrigin = nativeRaw;
