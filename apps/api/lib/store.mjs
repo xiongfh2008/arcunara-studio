@@ -14,6 +14,7 @@ import fs from "node:fs/promises";
 import crypto from "node:crypto";
 import path from "node:path";
 import { ApiError } from "./httputil.mjs";
+import { scanVersionTree } from "./project-files.mjs";
 
 const UUID_RE = /^[0-9a-f-]{36}$/;
 const SHARE_ID_RE = /^[0-9a-f]{16}$/;
@@ -271,6 +272,8 @@ export function createStore(config) {
       // existing projects never lose their open preview behavior).
       previewEnabled: meta.previewEnabled !== false && meta.lifecycleState !== "trashed",
       siteEnabled: meta.siteEnabled === true && meta.lifecycleState !== "trashed",
+      siteVersion: meta.siteEnabled === true ? (meta.siteVersion ?? entry.version) : null,
+      hasUnpublishedChanges: meta.siteEnabled === true && Number.isSafeInteger(meta.siteVersion) && meta.siteVersion !== entry.version,
       lifecycleState: meta.lifecycleState || "active",
       archivedAt: meta.archivedAt ?? null,
       trashedAt: meta.trashedAt ?? null
@@ -393,7 +396,7 @@ export function createStore(config) {
   // uploads of identical content collapse into one version safely. Re-adding
   // content that matches a NON-current historical version still creates a
   // new version (rolling back + re-deploying must move currentVersion).
-  async function addVersion(id, { stagedDir, stats, contentHash, expectedCurrentVersion, expectedSourceSha256 }) {
+  async function addVersion(id, { stagedDir, stats, contentHash, expectedCurrentVersion, expectedSourceSha256, expectedManifestHash }) {
     return withLock(id, async () => {
       const meta = await readRawMeta(id);
       if (meta?.lifecycleState === "trashed") {
@@ -429,6 +432,22 @@ export function createStore(config) {
         const actual=crypto.createHash("sha256").update(currentHtml).digest("hex");
         if (actual !== expectedSourceSha256) {
           throw new ApiError(409,"HTML changed since editor load","EDITOR_VERSION_CONFLICT");
+        }
+      }
+
+      if(expectedManifestHash!==undefined) {
+        if(!CONTENT_HASH_RE.test(expectedManifestHash) ||
+            !Number.isSafeInteger(expectedCurrentVersion) || expectedCurrentVersion<1) {
+          throw new ApiError(400,"Invalid editor revision","EDITOR_BASE_INVALID");
+        }
+        const current=await currentVersionEntry(id,meta);
+        if(current.version!==expectedCurrentVersion) {
+          throw new ApiError(409,"Current version changed","EDITOR_VERSION_CONFLICT");
+        }
+        const tree=await scanVersionTree(versionSourceDir(id,current),
+          {legacy:current.storage==="legacy-root"});
+        if(tree.revision!==expectedManifestHash) {
+          throw new ApiError(409,"Source tree changed","EDITOR_VERSION_CONFLICT");
         }
       }
 
@@ -494,6 +513,11 @@ export function createStore(config) {
 
       versions.push(entry);
 
+      // Freeze an already-published legacy site at its previous version.
+      // Saving a new draft must NOT silently change the public website.
+      if(meta.siteEnabled===true && !Number.isSafeInteger(meta.siteVersion)){
+        meta.siteVersion=(await currentVersionEntry(id,meta)).version;
+      }
       meta.versions = versions;
       meta.currentVersion = next;
       meta.updatedAt = createdAt;
@@ -610,6 +634,8 @@ export function createStore(config) {
         };
       }
 
+      if(meta.siteEnabled===true && !Number.isSafeInteger(meta.siteVersion))
+        meta.siteVersion=currentVersion;
       meta.currentVersion = target.version;
       meta.updatedAt = now();
 
@@ -687,6 +713,11 @@ export function createStore(config) {
           throw new ApiError(409, "Project is in trash", "PROJECT_TRASHED");
         }
         meta.siteEnabled = patch.siteEnabled;
+        if(patch.siteEnabled===true){
+          const current=await currentVersionEntry(id,meta);
+          meta.siteVersion=current.version;
+          meta.publishedAt=now();
+        }
       }
 
       if (patch.previewEnabled !== undefined) {
