@@ -988,14 +988,26 @@ function friendlyError(err) {
 
 // Busy-state helper: disables the button so the request cannot be
 // double-submitted, shows a stage hint instead of a fake progress bar.
+const busyButtonContent = new WeakMap();
 function setBusy(btn, busy, busyLabel) {
   if (busy) {
-    btn.dataset.label = btn.textContent;
+    // Preserve actual SVG nodes instead of losing icons to textContent.
+    if (!busyButtonContent.has(btn)) {
+      busyButtonContent.set(btn, Array.from(btn.childNodes, node => node.cloneNode(true)));
+      btn.dataset.label = btn.textContent;
+    }
+    btn.dataset.busyLabel = busyLabel;
     btn.textContent = busyLabel;
     btn.disabled = true;
     btn.setAttribute("aria-busy", "true");
   } else {
-    btn.textContent = btn.dataset.label ?? btn.textContent;
+    const previous = busyButtonContent.get(btn);
+    // Rendering may have already set a new state label while the request
+    // was running. Do not restore stale text over that new state.
+    if (previous && btn.textContent === btn.dataset.busyLabel) btn.replaceChildren(...previous);
+    else if (!previous) btn.textContent = btn.dataset.label ?? btn.textContent;
+    busyButtonContent.delete(btn);
+    delete btn.dataset.busyLabel;
     btn.disabled = false;
     btn.removeAttribute("aria-busy");
   }
@@ -1012,6 +1024,16 @@ function setAuthorized(ok) {
   $("tokenbar").classList.toggle("collapsed", ok);
   $("connectionToggle").setAttribute("aria-expanded", String(!ok));
   if (ok) $("tokenInput").value = "";
+  else if (projectListLoaded) {
+    // An expired or rejected authorization must not keep stale counts visible.
+    projects = [];
+    projectListLoaded = false;
+    resetSelectedProject();
+    $("projectList").textContent = "";
+    $("projectCount").textContent = "—";
+    $("projectListHint").textContent = "连接后加载项目列表";
+    renderPortfolioStats();
+  }
 }
 
 function renderPortfolioStats() {
@@ -1830,11 +1852,13 @@ $("refreshBtn").addEventListener("click", async () => {
 function applyProjectFilter(nextFilter) {
   $("lifecycleFilter").value = nextFilter;
   if (selected && !visibleProject(selected)) resetSelectedProject();
+  else if (!selected) ++selectionRequest; // cancel pending detail selection
   renderProjects();
 }
 
 $("projectSearch").addEventListener("input", () => {
   if (selected && !visibleProject(selected)) resetSelectedProject();
+  else if (!selected) ++selectionRequest; // prevent stale network responses
   renderProjects();
 });
 $("clearProjectSearch").addEventListener("click", () => {
