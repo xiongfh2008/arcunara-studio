@@ -89,13 +89,15 @@ test("RC19 portfolio metrics use actual project lifecycle values and reflect sel
 test("RC19 project selection ignores stale requests if user clicks another project",async()=>{
   const html=await consoleHtml();
   const pending=new Map();
-  const calls={detail:0,render:0};
+  const calls={detail:0,render:0,open:0};
   const nodes={
     githubWorkflowResult:{classList:{add(){} }},
-    inspectorEmpty:{classList:{add(){} }}
+    inspectorEmpty:{classList:{add(){} }},
+    drawerFeedback:{textContent:"previous project"},
+    detailCard:{open:false,showModal(){this.open=true;calls.open++;}}
   };
   const state=vm.createContext({
-    selectionRequest:0,
+    selectionRequest:0,drawerProjectId:null,
     selected:null,
     versions:[],shares:[],deployKeys:[],selectedVersion:null,
     generatedGithubWorkflow:null,
@@ -108,7 +110,7 @@ test("RC19 project selection ignores stale requests if user clicks another proje
     Promise
   });
   vm.runInContext(functionText(html,"selectProject"),state);
-  const first=vm.runInContext('selectProject("A")',state);
+  const first=vm.runInContext('selectProject("A", {openDetails:true})',state);
   const second=vm.runInContext('selectProject("B")',state);
   const complete=id=>{
     pending.get("/api/projects/"+id)({id,name:id});
@@ -124,6 +126,14 @@ test("RC19 project selection ignores stale requests if user clicks another proje
   assert.equal(state.selected.id,"B");
   assert.equal(calls.detail,1);
   assert.equal(calls.render,1);
+  assert.equal(calls.open,0,"background selection and stale requests do not open the drawer");
+
+  const explicit=vm.runInContext('selectProject("A", {openDetails:true})',state);
+  complete("A");
+  await explicit;
+  assert.equal(calls.open,1);
+  assert.equal(state.drawerProjectId,"A");
+  assert.equal(nodes.drawerFeedback.textContent,"");
 });
 
 test("RC19 responsive design and keyboard search do not override dialogs or token storage policy",async()=>{
