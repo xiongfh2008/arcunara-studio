@@ -14,6 +14,7 @@ import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
 import { analyzeAxureReadiness } from "./axure-readiness.mjs";
 import { buildEditableIR } from "../../../packages/rp-converter/ir.mjs";
+import { convertIRToRP1 } from "../../../packages/rp-converter/rp1-bridge.mjs";
 import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { compareProjectVersions } from "./version-diff.mjs";
 import { exportProjectVersionZip } from "./zip-export.mjs";
@@ -26,6 +27,7 @@ const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const AXURE_IR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-ir$`);
+const AXURE_RP1_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-rp1$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions$`);
 const VERSION_EXPORT_RE = new RegExp(`^/api/projects/${PROJECT_ID}/export$`);
@@ -290,6 +292,22 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         const requested = values.length ? Number(values[0]) : undefined;
         const report = await buildEditableIR(store, irMatch[1], requested);
         return sendJson(res, 200, report);
+      }
+
+      // RC18B: Zee-RP RP/1 JSON source only (target 9); not a native .rp.
+      // Same administrative authentication and version policy as /axure-ir.
+      const rp1Match = AXURE_RP1_RE.exec(pathname);
+      if (rp1Match && req.method === "GET") {
+        const qs = new URL(req.url || "/", "http://localhost").searchParams;
+        const versions = qs.getAll("version");
+        if (versions.length > 1 || (versions.length === 1 &&
+            !/^[1-9][0-9]*$/.test(versions[0]))) {
+          throw new ApiError(400, "Invalid version", "INVALID_VERSION");
+        }
+        const requested = versions.length ? Number(versions[0]) : undefined;
+        const ir = await buildEditableIR(store, rp1Match[1], requested);
+        const project = await store.getProject(rp1Match[1]);
+        return sendJson(res, 200, convertIRToRP1(ir, { projectName: project.name }));
       }
 
       // GitHub integration is opt-in: provide a downloadable workflow only.
