@@ -185,8 +185,8 @@ export function loadConfig(env = process.env) {
     }
     memberPublicOrigin=originRaw;
   }
-  if(memberLoginEnabled && (!teamAccessEnabled || apiHost!=="127.0.0.1")) {
-    throw new Error("Member login requires team access and loopback API host");
+  if(memberLoginEnabled && (!teamAccessEnabled || apiHost!=="127.0.0.1" || localAutoLogin)) {
+    throw new Error("Member login requires team access, loopback API host and no local auto-admin session");
   }
 
   // RC13: independent public static-site listener. Explicitly opt in and
