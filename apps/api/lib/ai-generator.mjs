@@ -44,7 +44,7 @@ export function createAiGenerator(config,{fetcher=fetch,readSecret=fs.readFile}=
         method:"POST",redirect:"error",signal:AbortSignal.timeout(45000),
         headers:{"authorization":"Bearer "+key,"content-type":"application/json"},
         body:JSON.stringify({
-          model:"deepseek-flash",temperature:0.6,max_tokens:4096,stream:false,
+          model:"deepseek-flash",thinking:{type:"disabled"},temperature:0.6,max_tokens:4096,stream:false,
           messages:[
             {role:"system",content:
               "Produce one complete self-contained HTML5 prototype only. Return raw HTML, not Markdown. "+
@@ -61,7 +61,10 @@ export function createAiGenerator(config,{fetcher=fetch,readSecret=fs.readFile}=
         throw new ApiError(502,"AI response too large","AI_RESPONSE_TOO_LARGE");
       let payload;
       try{payload=JSON.parse(raw);}catch{throw new ApiError(502,"Invalid AI response","AI_INVALID_RESPONSE");}
-      const html=normalizeHtml(payload?.choices?.[0]?.message?.content);
+      const answer=payload?.choices?.[0];
+      if(answer?.finish_reason && answer.finish_reason!=="stop")
+        throw new ApiError(502,"AI generation did not finish","AI_INCOMPLETE_RESPONSE");
+      const html=normalizeHtml(answer?.message?.content);
       return {html,model:"deepseek-flash",provider:"deepseek",
         bytes:Buffer.byteLength(html,"utf8"),status:"draft",
         requiresReview:true,usedTokens:payload?.usage?.total_tokens??null};
