@@ -87,6 +87,7 @@ npm start
 | `GET /api/projects/{id}` | 项目详情 | 200 详情视图 | 404 `PROJECT_NOT_FOUND` |
 | `POST /api/projects/{id}/versions` | 上传新版本（multipart 文件或 JSON `{html}`） | 201 `{projectId,version,createdAt,fileCount,totalSize,entryPoint,previewPath,currentVersion}` | 404 / 400 / 413 / 415 |
 | `GET /api/projects/{id}/versions` | 版本历史（升序 + isCurrent） | 200 `{projectId,versions:[...]}` | 404 |
+| `GET /api/projects/{id}/export?version=N` | RC17 管理员导出当前版本（省略 N）或指定历史版本为 ZIP；流式生成，不影响当前版本 | 200 application/zip 附件 | 400 `INVALID_VERSION` / 404 `VERSION_NOT_FOUND` / 409 `PROJECT_TRASHED` / 413 `EXPORT_SIZE_LIMIT` |
 | `POST /api/projects/{id}/rollback` | 回滚 `{version:N}`，幂等 | 200 `{projectId,ok,rolledBack,currentVersion,previewPath}` | 404 / 400 `INVALID_VERSION` / `VERSION_NOT_FOUND` |
 | `PATCH /api/projects/{id}` | RC5：编辑 `{name?, description?, previewEnabled?}`，UUID 与数据不变 | 200 详情视图 | 404 / 400 `NAME_REQUIRED` / `NAME_TOO_LONG` / `INVALID_PREVIEW_ENABLED` |
 | `GET /api/projects/{id}/shares` | RC5：分享列表（无凭证明文） | 200 `{projectId,shares:[{id,createdAt,expiresAt,status,enabled,revoked,accessCount,lastAccessAt,lastAccessStatus}]}` | 404 |

@@ -408,8 +408,9 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
       <pre id="versionDiffReport" role="status" style="background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:12px;white-space:pre-wrap;word-break:break-word;max-height:270px;overflow:auto;font-size:12px">选择两个版本后点击比较</pre>
     </section>
     <div class="row" style="margin-top:10px">
+      <button type="button" id="downloadVersionZipBtn" class="ghost">下载选中版本 ZIP</button>
       <button id="rollbackBtn" class="danger">回滚到选中版本</button>
-      <span class="hint">回滚只切换当前版本指针，预览链接与分享链接不变，都指向当前版本。</span>
+      <span class="hint">下载不影响当前版本和分享。回滚只切换当前版本指针，预览链接与分享链接不变。</span>
     </div>
 
 
@@ -1818,6 +1819,48 @@ $("compareVersionsBtn").addEventListener("click", async () => {
     $("versionDiffReport").textContent = "比较失败：" + friendlyError(err);
     feedback("版本差异对比失败：" + friendlyError(err), false);
   } finally { setBusy(btn, false); }
+});
+
+// RC17: use same-origin authenticated fetch and a local object URL. Never
+// expose administrator credentials in a download URL or anchor href.
+$("downloadVersionZipBtn").addEventListener("click", async () => {
+  if (!selected || !selectedVersion) {
+    feedback("请先选择要下载的版本", false);
+    return;
+  }
+  const btn = $("downloadVersionZipBtn");
+  if (btn.disabled) return;
+  const projectId = selected.id;
+  const version = selectedVersion;
+  setBusy(btn, true, "正在打包…");
+  try {
+    const headers = token ? { Authorization: "Bearer " + token } : {};
+    const response = await fetch(
+      "/api/projects/" + projectId + "/export?version=" + version,
+      { headers, credentials: "same-origin" }
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error || ("HTTP " + response.status));
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "arcunara-" + projectId + "-v" + version + ".zip";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+    feedback("v" + version + " ZIP 已生成，开始下载", true);
+  } catch (err) {
+    feedback("ZIP 下载失败：" + friendlyError(err), false);
+  } finally {
+    setBusy(btn, false);
+  }
 });
 
 $("rollbackBtn").addEventListener("click", async () => {
