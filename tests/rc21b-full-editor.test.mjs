@@ -122,7 +122,9 @@ test("RC21B never permits path traversal, unsafe extensions, source spoofing, RB
       {path:"meta.json",content:"secret"},
       {path:"new.exe",content:"bad"},
       {path:"assets/app.js",content:"a".repeat(180100)},
-      {path:"index.html",remove:true}
+      {path:"index.html",remove:true},
+      {path:"index.html",content:"broken entry without html root"},
+      {path:"assets/app.js/nested.css",content:"body{}"}
     ];
     for(const change of bad){
       const res=await app.api(base+"/publish",post({
