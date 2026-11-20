@@ -227,6 +227,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         "default-src 'none'; " +
         "script-src 'unsafe-inline'; " +
         "style-src 'unsafe-inline'; " +
+        "frame-src 'self' blob:; " +
         "connect-src 'self'; " +
         "form-action 'none'; " +
         "frame-ancestors 'none'; " +
