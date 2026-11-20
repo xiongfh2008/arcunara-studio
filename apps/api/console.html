@@ -3454,6 +3454,141 @@ $("saveProjectFilesBtn").addEventListener("click",async()=>{
   }finally{setBusy(btn,false);}
 });
 
+
+// RC21C: optional, administrator-only AI draft generation. Provider keys
+// remain server-side; nothing is published until a distinct user action.
+let aiDraft=null;
+function showAiDraftPreview(html){
+  $("aiGeneratedPreview").srcdoc="<!doctype html>"+draftFrameCsp+html;
+}
+function aiShowStatus(message){$("aiGeneratedStatus").textContent=message;}
+function aiClear(){
+  aiDraft=null;
+  $("aiGeneratedHtml").value="";
+  $("aiPrompt").value="";
+  $("aiGeneratedResult").classList.add("hidden");
+  $("aiGeneratedPreview").srcdoc="";
+  aiShowStatus("");
+}
+$("openAiGenerateBtn").addEventListener("click",async()=>{
+  if(sessionPrincipal.type==="member")return;
+  $("aiGenerateDialog").showModal();
+  if(!$("aiProjectName").value)$("aiProjectName").value="AI 生成原型";
+  try{
+    const status=await api("/api/ai/status");
+    $("aiGenerationQuota").textContent="本服务进程今日剩余调用："+status.remainingCalls;
+  }catch(err){aiShowStatus(friendlyError(err));}
+});
+$("closeAiGenerateBtn").addEventListener("click",()=>{
+  if(aiDraft&&!window.confirm("关闭后未保存的 AI 草稿将丢弃，确定关闭？"))return;
+  $("aiGenerateDialog").close();
+});
+$("aiGenerateDialog").addEventListener("close",aiClear);
+$("aiGenerateActionBtn").addEventListener("click",async()=>{
+  const prompt=$("aiPrompt").value.trim();
+  if(!prompt||prompt.length>2400){
+    aiShowStatus("请输入不超过 2400 字的详细页面要求。");return;
+  }
+  const btn=$("aiGenerateActionBtn");setBusy(btn,true,"AI 正在生成…");
+  try{
+    const result=await api("/api/ai/generate",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({prompt})
+    });
+    aiDraft=result;
+    $("aiGeneratedHtml").value=result.html;
+    $("aiGeneratedResult").classList.remove("hidden");
+    showAiDraftPreview(result.html);
+    $("aiGenerationQuota").textContent="生成用量："+(result.usedTokens??"未知")+" tokens";
+    aiShowStatus("已生成待审核草稿；请先检查代码/效果，再创建项目或放入已有编辑器。");
+  }catch(err){aiShowStatus("生成失败："+friendlyError(err));}
+  finally{setBusy(btn,false);}
+});
+$("aiGeneratedHtml").addEventListener("input",()=>{
+  if(aiDraft){
+    aiDraft.html=$("aiGeneratedHtml").value;
+    aiShowStatus("已修改生成草稿，请点击查看静态预览检查效果。");
+  }
+});
+$("aiPreviewToggleBtn").addEventListener("click",()=>{
+  if(!aiDraft)return;
+  showAiDraftPreview($("aiGeneratedHtml").value);
+  aiShowStatus("预览为脚本禁用的沙箱。保存后可查看完整原型。");
+});
+$("aiCreateProjectBtn").addEventListener("click",async()=>{
+  if(!aiDraft||sessionPrincipal.type==="member")return;
+  const html=$("aiGeneratedHtml").value;
+  const name=$("aiProjectName").value.trim();
+  if(!name||name.length>100||sourceBytes(html)>180000||!html.toLowerCase().includes("<html")){
+    aiShowStatus("请填写项目名称，并确保 HTML 合法且不超过 180000 字节。");return;
+  }
+  const btn=$("aiCreateProjectBtn");setBusy(btn,true,"创建项目…");
+  try{
+    const created=await api("/api/projects",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,html})
+    });
+    $("aiGenerateDialog").close();
+    await loadProjects();
+    await selectProject(created.id);
+    feedback("AI 草稿已创建为独立项目；公开网站需要单独审核并发布。",true);
+  }catch(err){aiShowStatus("创建失败："+friendlyError(err));}
+  finally{setBusy(btn,false);}
+});
+$("aiLoadExistingBtn").addEventListener("click",async()=>{
+  if(!aiDraft||!selected||sessionPrincipal.type==="member"){
+    aiShowStatus("请先选择一个具有编辑权限的单文件 HTML 项目。");return;
+  }
+  const html=$("aiGeneratedHtml").value,id=selected.id;
+  const btn=$("aiLoadExistingBtn");setBusy(btn,true,"读取原版本…");
+  try{
+    const source=await api("/api/projects/"+id+"/html-editor");
+    if(selected.id!==id)return;
+    $("aiGenerateDialog").close();
+    htmlEditorBase=source;
+    $("htmlEditorSource").value=html;
+    $("htmlEditorSource").readOnly=false;
+    $("publishHtmlEditorBtn").disabled=false;
+    $("htmlEditorVersion").textContent="基线 v"+source.version+" · AI 待审核草稿";
+    $("htmlEditorStatus").textContent="AI 已填入编辑器，确认后才能保存为新版本；公开发布需再确认。";
+    htmlEditorSetCount();
+    htmlEditorStaticPreview();
+    $("htmlEditorDialog").showModal();
+  }catch(err){
+    aiShowStatus(err?.json?.code==="EDITOR_MULTIFILE_UNSUPPORTED"
+      ?"当前项目含多文件，请使用多文件编辑器，或创建新的单文件 AI 项目。"
+      :"读取旧版本失败："+friendlyError(err));
+  }finally{setBusy(btn,false);}
+});
+$("republishCurrentBtn").addEventListener("click",async()=>{
+  if(!selected||sessionPrincipal.type==="member"||
+     !window.confirm("确定公开发布当前 v"+selected.currentVersion+" 版本？已发布网站将切换至该版本。"))return;
+  const id=selected.id,btn=$("republishCurrentBtn");
+  setBusy(btn,true,"发布中…");
+  try{
+    await api("/api/projects/"+id,{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({siteEnabled:true})
+    });
+    await selectProject(id);
+    feedback("已确认发布最新版本，公开网站现在指向当前版本。",true);
+  }catch(err){feedback("发布失败："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+// Feature detection is authenticated, and AI creation is kept away from
+// project-scoped members even if the model server happens to be configured.
+const originalSetAuthorized=setAuthorized;
+setAuthorized=function(ok){
+  originalSetAuthorized(ok);
+  $("openAiGenerateBtn").classList.add("hidden");
+  if(ok&&sessionPrincipal.type==="admin"){
+    api("/api/ai/status").then(status=>{
+      if(isAuthorized&&sessionPrincipal.type==="admin"&&status.enabled)
+        $("openAiGenerateBtn").classList.remove("hidden");
+    }).catch(()=>{});
+  }
+};
+
 </script>
 </body>
 </html>
