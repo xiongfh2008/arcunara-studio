@@ -1530,14 +1530,19 @@ $("detailCard").addEventListener("cancel", event => {
     toolsToggle.focus();
   }
 });
-$("detailCard").addEventListener("close", () => {
+function restoreProjectFocus() {
   projectTools.open = false;
   if (!drawerProjectId || $("detailCard").open || document.querySelector("dialog[open]")) return;
   const trigger = [...$("projectList").querySelectorAll("[data-project-id]")]
     .find(button => button.dataset.projectId === drawerProjectId);
-  (trigger || $("projectSearch")).focus();
+  // Native close is queued. Preserve focus when the user has already moved on.
+  const focused = document.activeElement;
+  if (!focused || focused === document.body || focused === document.documentElement || $("detailCard").contains(focused)) {
+    (trigger || $("projectSearch")).focus();
+  }
   drawerProjectId = null;
-});
+}
+$("detailCard").addEventListener("close", restoreProjectFocus);
 
 function kv(label, value) {
   const dt = document.createElement("dt");

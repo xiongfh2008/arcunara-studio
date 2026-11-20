@@ -215,3 +215,24 @@ test("a file drop updates only the chosen input and reports invalid files inside
   assert.equal(filename.textContent, "second.HTML");
   assert.equal(status.textContent, "");
 });
+
+test("closing the detail drawer restores row focus without taking it from an active search", async () => {
+  const html = await consoleHtml();
+  const document = { body: {}, documentElement: {}, querySelector: () => null };
+  const row = { dataset: { projectId: "sample" }, focus() { document.activeElement = row; } };
+  const search = { focus() { document.activeElement = search; } };
+  const nodes = {
+    projectSearch: search,
+    projectList: { querySelectorAll: () => [row] },
+    detailCard: { open: false, contains: () => false }
+  };
+  const ctx = vm.createContext({ document, $: id => nodes[id], projectTools: { open: false } });
+  vm.runInContext(functionText(html, "restoreProjectFocus"), ctx);
+  for (const [current, expected] of [[document.body, row], [search, search]]) {
+    ctx.drawerProjectId = "sample";
+    document.activeElement = current;
+    ctx.restoreProjectFocus();
+    assert.equal(document.activeElement, expected);
+    assert.equal(ctx.drawerProjectId, null);
+  }
+});
