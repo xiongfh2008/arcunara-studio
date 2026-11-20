@@ -2034,8 +2034,8 @@ $("openTeamDialog").addEventListener("click",async()=>{
   $("teamCredential").textContent="";
   $("teamCredentialBox").classList.add("hidden");
   $("teamUsersDialog").showModal();
-  try{await refreshTeamUsers();}
-  catch(err){feedback("加载团队成员失败："+friendlyError(err),false);}
+  try{await refreshTeamUsers();await refreshAuthAudit();}
+  catch(err){feedback("加载团队成员或审计失败："+friendlyError(err),false);}
 });
 $("closeTeamDialog").addEventListener("click",()=>{
   $("teamUsersDialog").close();
