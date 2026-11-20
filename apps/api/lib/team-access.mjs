@@ -241,6 +241,7 @@ export function memberAction(method,pathname,role) {
   const read=[
     new RegExp("^/api/projects/"+id+"$"),
     new RegExp("^/api/projects/"+id+"/versions$"),
+    new RegExp("^/api/projects/"+id+"/html-editor$"),
     new RegExp("^/api/projects/"+id+"/compare-versions$"),
     new RegExp("^/api/projects/"+id+"/export$"),
     new RegExp("^/api/projects/"+id+"/axure-readiness$"),
@@ -251,7 +252,8 @@ export function memberAction(method,pathname,role) {
   if (role!=="editor") return false;
   return (method==="POST" && (
     new RegExp("^/api/projects/"+id+"/versions$").test(pathname) ||
-    new RegExp("^/api/projects/"+id+"/rollback$").test(pathname)
+    new RegExp("^/api/projects/"+id+"/rollback$").test(pathname) ||
+    new RegExp("^/api/projects/"+id+"/html-editor/publish$").test(pathname)
   )) || (method==="PATCH" &&
     new RegExp("^/api/projects/"+id+"/versions/[0-9]+$").test(pathname));
 }
