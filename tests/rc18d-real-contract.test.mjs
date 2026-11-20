@@ -39,7 +39,10 @@ test("RC18D generates deterministic real RP/1 source fixtures, not fake native f
     assert.equal(totalPages,4);
     assert.ok(totalWidgets>10);
     assert.deepEqual((await fs.readdir(out)).sort(),
-      report.fixtures.map(x=>x.file).sort());
+      [...report.fixtures.map(x=>x.file),"assets"].sort());
+    const logo=await fs.readFile(path.join(out,"assets","logo.png"));
+    assert.equal(logo.subarray(0,8).toString("hex"),"89504e470d0a1a0a");
+    assert.ok(logo.length>60,"PNG fixture is nonempty");
     const again=spawnSync(process.execPath,[generator,out],{
       encoding:"utf8",timeout:20000
     });
