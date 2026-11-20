@@ -173,7 +173,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           if(req.headers.authorization)
             return sendJson(res,403,{error:"Forbidden",code:"MEMBER_CREDENTIAL_CONFLICT"});
           const value=await readJsonPayload(req,config.limits);
-          return sendJson(res,200,await passwords.activate(value));
+          return sendJson(res,200,await passwords.activate(value,req));
         }
         const session=await passwords.authorizeSession(req);
         if(req.method==="GET" && pathname==="/api/auth/session") {
@@ -192,7 +192,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
           if(!session)return sendJson(res,401,{error:"Unauthorized",code:"MEMBER_SESSION_INVALID"});
           const value=await readJsonPayload(req,config.limits);
           const changed=await passwords.changePassword(
-            session.user.id,value.oldPassword,value.newPassword);
+            session.user.id,value?.oldPassword,value?.newPassword);
           res.setHeader("Set-Cookie",passwords.clearCookie(req));
           return sendJson(res,200,changed);
         }
