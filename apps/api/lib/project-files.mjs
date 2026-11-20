@@ -17,7 +17,7 @@ function validPath(value) {
     Buffer.byteLength(value,"utf8")<=256 &&
     value.split("/").length<=MAX_DEPTH &&
     value.split("/").every(x=>isValidSegment(x,{allowDotfiles:false})&&
-      x.toLowerCase()!=="meta.json"&&x!=="versions" || false);
+      x.toLowerCase()!=="meta.json");
 }
 function editable(name){return TEXT_EXT.has(path.posix.extname(name).toLowerCase());}
 function ensureCleanMeta(meta) {
@@ -141,10 +141,21 @@ export async function publishSourceChanges(store,id,data) {
   if(snapshot.entry.version!==baseVersion||snapshot.tree.revision!==baseRevision)
     throw new ApiError(409,"Current version changed","EDITOR_VERSION_CONFLICT");
   const original=new Map(snapshot.tree.files.map(f=>[f.path,f]));
+  const dirNames=new Set(snapshot.tree.directories.map(collisionKey));
+  const fileKeys=new Set(snapshot.tree.files.map(f=>collisionKey(f.path)));
   const existingKeys=new Map(snapshot.tree.files.map(f=>[collisionKey(f.path),f.path]));
   for(const c of changes){
     if(c.path===snapshot.entry.entryPoint&&c.remove)
       throw new ApiError(400,"Cannot delete HTML entry point","EDITOR_ENTRY_REQUIRED");
+    if(c.path===snapshot.entry.entryPoint &&
+        (!/<html(?:\s|>)/i.test(c.content)||!/<\/html\s*>/i.test(c.content)))
+      throw new ApiError(400,"Entry point must be complete HTML","EDITOR_HTML_INVALID");
+    const parts=c.path.split("/");
+    if(dirNames.has(collisionKey(c.path)) ||
+       parts.slice(0,-1).some((_,i)=>fileKeys.has(
+         collisionKey(parts.slice(0,i+1).join("/"))))) {
+      throw new ApiError(409,"File and directory path conflict","EDITOR_PATH_COLLISION");
+    }
     if(c.remove&&!original.has(c.path))
       throw new ApiError(404,"Cannot remove missing file","EDITOR_FILE_NOT_FOUND");
     const conflict=existingKeys.get(collisionKey(c.path));
