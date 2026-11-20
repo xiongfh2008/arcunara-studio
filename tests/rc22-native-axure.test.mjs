@@ -47,7 +47,7 @@ before(async()=>{
     {name:"data/document.js",data:"window.axureDocument={};"},
     {name:"resources/scripts/axure/player.js",data:"localStorage.setItem('native', 'yes'); new Function('return 1')();"},
     {name:"page.html",data:"<html><body>Axure business content</body></html>"}
-  ])],"axure.zip");
+  ])]),"axure.zip");
   let res=await server.api("/api/projects",{method:"POST",body:fd});
   assert.equal(res.status,201,JSON.stringify(res.json));axureId=res.json.id;
   res=await server.api(`/api/projects/${axureId}/shares`,{
@@ -61,7 +61,7 @@ before(async()=>{
   pd.set("name","Ordinary HTML");
   pd.set("file",new Blob([filesZip([
     {name:"index.html",data:"<html>Ordinary site</html>"}
-  ])],"plain.zip");
+  ])]),"plain.zip");
   res=await server.api("/api/projects",{method:"POST",body:pd});
   assert.equal(res.status,201);plainId=res.json.id;
   res=await server.api(`/api/projects/${plainId}/shares`,{
