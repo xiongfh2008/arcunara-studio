@@ -447,6 +447,40 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
 
+
+/* RC20A: show only the role-appropriate, server-authorized capabilities.
+   This is presentation only; API enforces every permission independently. */
+.member-mode #emptyCreateBtn,
+.member-mode #openCreateDialog,
+.member-mode #goShareDetail,
+.member-mode #copyLink,
+.member-mode #previewLink,
+.member-mode #openSharesPanel,
+.member-mode #openDeployPanel,
+.member-mode #openSettingsPanel,
+.member-mode #previewQuickToggle,
+.member-mode #siteHostingToggle,
+.member-mode #copyCliCommand,
+.member-mode #shareOverviewCard,
+.member-mode #siteHostingCard,
+.member-mode #deployOverviewCard,
+.member-mode .inspector-bottom>section:nth-child(2),
+.member-mode .detail-tabs [data-tab="shares"],
+.member-mode .detail-tabs [data-tab="deploy"],
+.member-mode .detail-tabs [data-tab="overview"],
+.member-mode .detail-tabs [data-tab="members"],
+.viewer-mode #openUploadDialog,
+.viewer-mode #openUploadDialogDetail,
+.viewer-mode #versionNoteEditorRow,
+.viewer-mode #rollbackBtn{display:none!important}
+.team-list{margin:12px 0;padding:0;list-style:none}
+.team-list li{border-top:1px solid var(--border);padding:11px 0;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12px}
+.team-list li strong{font-weight:650;display:block}
+.team-list li small{color:var(--muted);font-size:11px}
+.team-list li button{font-size:11px;padding:5px 9px}
+.credential-once{display:block;overflow-wrap:anywhere;background:#f1f4ff;border:1px solid #dce4f7;border-radius:10px;padding:13px;margin:7px 0;font-size:12px}
+#teamCredentialBox{margin-top:15px}
+#memberAccessInfo{margin-top:8px;color:#5461a1}
 </style>
 </head>
 <body>
@@ -503,9 +537,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       <div>
         <div class="workspace-eyebrow">WORKSPACE <span aria-hidden="true">/</span> PROJECTS</div>
         <h1 id="viewTitle">项目管理</h1>
-        <p id="viewSubtitle">集中管理原型、版本、分享和网站发布</p>
+        <p id="viewSubtitle">集中管理原型、版本、分享和网站发布</p><p id="memberAccessInfo" class="hint hidden" role="status"></p>
       </div>
-      <div class="workspace-help"><span class="help-dot" aria-hidden="true"></span>原型工作台</div>
+      <div class="row"><button type="button" class="ghost hidden" id="openTeamDialog">团队成员</button><div class="workspace-help"><span class="help-dot" aria-hidden="true"></span>原型工作台</div></div>
     </header>
     <section class="portfolio-overview" aria-label="项目状态概览" id="portfolioOverview">
       <button type="button" class="portfolio-tile" data-portfolio-filter="all" aria-pressed="false" disabled>
@@ -567,7 +601,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
             <div class="detail-caption"><span id="summaryState" class="status-chip">—</span><span id="summaryFiles">—</span> 个文件 · <span id="summarySize">—</span></div>
           </div>
         </section>
-        <section class="card inspector-section">
+        <section class="card inspector-section" id="shareOverviewCard">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-share"/></svg> 分享概况</h3><button type="button" id="openSharesPanel" class="small-link">管理分享 ›</button></div>
           <div class="inspector-stats">
             <div><span>有效分享链接</span><strong id="activeShareCount">0</strong></div>
@@ -575,13 +609,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
           </div>
           <p class="inspector-note" id="shareOverviewNote">尚未创建分享链接</p>
         </section>
-        <section class="card inspector-section" aria-label="正式网站发布">
+        <section class="card inspector-section" id="siteHostingCard" aria-label="正式网站发布">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 正式网站发布</h3><span id="siteHostingState" class="status-chip off">未发布</span></div>
           <div class="inspector-keyline"><span>独立站点链接</span><a id="siteHostingUrl" href="" target="_blank" rel="noopener noreferrer" style="overflow-wrap:anywhere;font-size:12px">未发布</a></div>
           <p id="siteHostingHint" class="hint">静态网站独立域名托管与原型预览分离；需要管理员明确发布。</p>
           <button type="button" id="siteHostingToggle" class="ghost">发布静态网站</button>
         </section>
-        <section class="card inspector-section">
+        <section class="card inspector-section" id="deployOverviewCard">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 自动部署</h3><button type="button" id="openDeployPanel" class="small-link">配置部署 ›</button></div>
           <div class="inspector-keyline"><span>有效部署密钥</span><span id="deployStatus" class="status-chip off">未配置</span></div>
           <div class="inspector-keyline"><span>最近密钥使用</span><strong id="latestDeployTime">暂无</strong></div>
@@ -609,6 +643,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     </div>
   </main>
 </div>
+<dialog class="create-dialog" id="teamUsersDialog" aria-labelledby="teamUsersHeading">
+  <div class="create-dialog-header"><h2 id="teamUsersHeading">团队成员管理</h2><button type="button" class="ghost" id="closeTeamDialog">关闭</button></div>
+  <div class="create-dialog-content">
+    <p class="hint">由管理员创建成员访问凭证。每个账号只能看到获授权的项目，Token 只在创建或轮换时展示一次；不会自动发送邮件。</p>
+    <label class="field"><span>成员姓名</span><input id="newMemberName" maxlength="100" autocomplete="off"></label>
+    <label class="field"><span>成员邮箱</span><input id="newMemberEmail" type="email" maxlength="254" autocomplete="off"></label>
+    <button type="button" id="createTeamUserBtn">创建成员</button>
+    <div id="teamCredentialBox" class="hidden">
+      <p class="hint">请立即安全传递此访问凭证，关闭弹窗后无法再次查看。</p>
+      <code id="teamCredential" class="credential-once"></code>
+      <button type="button" class="ghost" id="copyTeamCredential">复制凭证</button>
+    </div>
+    <h3>已有成员</h3>
+    <ul id="teamUsersList" class="team-list" aria-label="已创建的成员账号"></ul>
+  </div>
+</dialog>
 <dialog class="create-dialog" id="axureReadinessDialog" aria-labelledby="axureReadinessHeading">
   <div class="create-dialog-header"><h2 id="axureReadinessHeading">Axure 转换评估</h2><button type="button" class="ghost" id="closeAxureReadinessBtn">关闭</button></div>
   <div class="create-dialog-content"><p id="axureReadinessSummary" class="hint"></p>
@@ -625,6 +675,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
           <button type="button" role="tab" data-tab="shares" aria-selected="false">分享管理</button>
           <button type="button" role="tab" data-tab="deploy" aria-selected="false">自动部署</button>
           <button type="button" role="tab" data-tab="overview" aria-selected="false">项目设置</button>
+          <button type="button" role="tab" data-tab="members" aria-selected="false" class="hidden" id="membersTab">成员权限</button>
         </nav>
         <div class="detail-panel" data-panel="versions" role="tabpanel">    <h3>历史版本</h3>
     <p class="hint">上传新的 HTML/ZIP 后，原有预览地址保持不变。</p>
@@ -635,7 +686,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       <thead><tr><th>版本</th><th>时间</th><th>文件数</th><th>大小</th><th>入口</th><th>状态</th><th></th></tr></thead>
       <tbody id="versionRows"></tbody>
     </table></div>
-    <div class="row" style="margin-top:12px;align-items:end">
+    <div class="row" id="versionNoteEditorRow" style="margin-top:12px;align-items:end">
       <label class="field" style="margin:0;flex:1;min-width:230px"><span>所选版本的更新说明（500字以内）</span><input id="versionNoteInput" maxlength="500" placeholder="例如：调整付款配置弹窗和字段校验" /></label>
       <button type="button" id="saveVersionNoteBtn" class="ghost">保存说明</button>
     </div>
@@ -733,6 +784,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     </table></div>
 
     </div>
+        <div class="detail-panel" data-panel="members" role="tabpanel" hidden>
+    <h3>项目成员权限</h3>
+    <p class="hint">管理员为已有账号指定只读或版本编辑权限。成员不能发布网站、管理分享和部署密钥，也不能删除项目。</p>
+    <div class="row">
+      <label class="field" style="flex:2;min-width:180px"><span>选择成员账号</span><select id="memberPicker" aria-label="选择已有成员账号"></select></label>
+      <label class="field" style="flex:1;min-width:100px"><span>项目权限</span><select id="memberRole"><option value="viewer">只读</option><option value="editor">版本编辑</option></select></label>
+      <button type="button" id="assignMemberBtn">保存成员权限</button>
+    </div>
+    <ul id="memberList" class="team-list" aria-label="当前项目的成员"></ul>
+  </div>
         <div class="detail-panel" data-panel="overview" role="tabpanel" hidden>    <h3>基本信息</h3>
     <label class="field"><span>项目名称</span>
       <input type="text" id="editName" maxlength="100">
@@ -824,6 +885,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 let token = null;
 // Shared connection state: supports either a manual bearer token or a local HttpOnly session.
 let isAuthorized = false;
+let sessionPrincipal = {type:"admin",teamEnabled:false};
+let teamUsers = [];
 let projects = [];
 let selected = null;
 let versions = [];
@@ -1013,6 +1076,39 @@ function setBusy(btn, busy, busyLabel) {
   }
 }
 
+function applyPrincipal(identity) {
+  const previous=sessionPrincipal;
+  sessionPrincipal=identity || {type:"admin",teamEnabled:false};
+  const member=sessionPrincipal.type==="member";
+  const adminTeam=sessionPrincipal.type==="admin" && sessionPrincipal.teamEnabled===true;
+  if (previous.type!==sessionPrincipal.type ||
+      previous.user?.id!==sessionPrincipal.user?.id) {
+    resetSelectedProject();
+    activeTab="versions";
+  }
+  document.body.classList.toggle("member-mode",member);
+  document.body.classList.toggle("viewer-mode",member && selected?.role!=="editor");
+  $("openTeamDialog").classList.toggle("hidden",!adminTeam);
+  $("membersTab").classList.toggle("hidden",!adminTeam);
+  $("viewSubtitle").textContent=member
+    ? "按项目授权访问 · 账号凭证仅存于当前会话"
+    : "集中管理原型、版本、分享和网站发布";
+  $("memberAccessInfo").classList.toggle("hidden",!member);
+  if(member) {
+    $("memberAccessInfo").textContent=
+      sessionPrincipal.user.name+" · "+
+      (selected?.role==="editor"?"版本编辑":"只读权限")+
+      " · 管理员单独授权分享/发布";
+    $("inspectorEmpty").querySelector("h2").textContent="选择已授权项目";
+    $("inspectorEmpty").querySelector("p").textContent=
+      "只可访问管理员授权的项目和允许的版本操作。";
+  } else {
+    $("inspectorEmpty").querySelector("h2").textContent="选择一个项目";
+    $("inspectorEmpty").querySelector("p").textContent=
+      "查看原型预览、历史版本、分享链接、部署及 Axure 转换工具。";
+  }
+}
+
 function setAuthorized(ok) {
   isAuthorized = Boolean(ok);
   $("authBadge").textContent = ok
@@ -1023,8 +1119,11 @@ function setAuthorized(ok) {
   $("connectionToggle").classList.toggle("connected", ok);
   $("tokenbar").classList.toggle("collapsed", ok);
   $("connectionToggle").setAttribute("aria-expanded", String(!ok));
-  if (ok) $("tokenInput").value = "";
-  else if (projectListLoaded) {
+  if (ok) {
+    $("tokenInput").value = "";
+  } else {
+    applyPrincipal({type:"admin",teamEnabled:false});
+    if (projectListLoaded) {
     // An expired or rejected authorization must not keep stale counts visible.
     projects = [];
     projectListLoaded = false;
@@ -1033,6 +1132,7 @@ function setAuthorized(ok) {
     $("projectCount").textContent = "—";
     $("projectListHint").textContent = "连接后加载项目列表";
     renderPortfolioStats();
+    }
   }
 }
 
@@ -1248,14 +1348,16 @@ function renderProjects() {
 async function selectProject(id) {
   const request = ++selectionRequest;
   try {
+    const member=typeof sessionPrincipal!=="undefined" && sessionPrincipal.type==="member";
     const [project, versionData, shareData, keyData] = await Promise.all([
       api("/api/projects/" + id),
       api("/api/projects/" + id + "/versions"),
-      api("/api/projects/" + id + "/shares"),
-      api("/api/projects/" + id + "/deploy-keys")
+      member?Promise.resolve({shares:[]}):api("/api/projects/" + id + "/shares"),
+      member?Promise.resolve({deployKeys:[]}):api("/api/projects/" + id + "/deploy-keys")
     ]);
     if (request !== selectionRequest) return;
     selected = project;
+    if (typeof applyPrincipal==="function") applyPrincipal(sessionPrincipal);
     versions = versionData.versions;
     shares = shareData.shares;
     deployKeys = keyData.deployKeys;
@@ -1723,9 +1825,182 @@ $("copyNewDeployKey").addEventListener("click", async () => {
 });
 
 
+// RC20A: all team operations are admin-only at the API boundary. Tokens
+// are visible in this dialog only after explicit create/rotation and erased
+// when the dialog closes; never placed in a URL or browser storage.
+function showIssuedCredential(value) {
+  $("teamCredential").textContent=value;
+  $("teamCredentialBox").classList.remove("hidden");
+}
+async function refreshTeamUsers() {
+  if(sessionPrincipal.type!=="admin"||sessionPrincipal.teamEnabled!==true)return;
+  const data=await api("/api/users");
+  teamUsers=data.users;
+  const list=$("teamUsersList");
+  list.textContent="";
+  for(const u of teamUsers) {
+    const li=document.createElement("li");
+    const info=document.createElement("span");
+    const strong=document.createElement("strong");
+    strong.textContent=u.name+" · "+u.email;
+    const status=document.createElement("small");
+    status.textContent=u.enabled?"已启用":"已停用";
+    info.append(strong,status);
+    const actions=document.createElement("span");
+    actions.className="row";
+    const toggle=document.createElement("button");
+    toggle.type="button";
+    toggle.className="ghost";
+    toggle.textContent=u.enabled?"停用":"启用";
+    toggle.addEventListener("click",async()=>{
+      if(u.enabled && !window.confirm("确定停用此成员？当前访问凭证将立即失效。"))return;
+      try {
+        await api("/api/users/"+u.id,{
+          method:"PATCH",headers:{"content-type":"application/json"},
+          body:JSON.stringify({enabled:!u.enabled})
+        });
+        await refreshTeamUsers();
+        if(selected && activeTab==="members") await refreshProjectMembers();
+      }catch(err){feedback("更新成员状态失败："+friendlyError(err),false);}
+    });
+    const rotate=document.createElement("button");
+    rotate.type="button";
+    rotate.className="ghost";
+    rotate.textContent="重置凭证";
+    rotate.addEventListener("click",async()=>{
+      if(!window.confirm("将立即使该成员旧凭证失效。确定生成新凭证？"))return;
+      try {
+        const result=await api("/api/users/"+u.id+"/rotate-token",{method:"POST"});
+        showIssuedCredential(result.token);
+        feedback("已轮换凭证，请安全发送给该成员",true);
+      }catch(err){feedback("重置失败："+friendlyError(err),false);}
+    });
+    actions.append(toggle,rotate);
+    li.append(info,actions);
+    list.appendChild(li);
+  }
+  if(!teamUsers.length) {
+    const item=document.createElement("li");
+    item.textContent="还没有团队成员";
+    list.appendChild(item);
+  }
+}
+async function refreshProjectMembers() {
+  if (!selected || sessionPrincipal.type!=="admin" ||
+      sessionPrincipal.teamEnabled!==true) return;
+  const projectId=selected.id;
+  try {
+    const [users,data]=await Promise.all([
+      api("/api/users"),
+      api("/api/projects/"+projectId+"/members")
+    ]);
+    if(!selected || selected.id!==projectId)return;
+    teamUsers=users.users;
+    const picker=$("memberPicker");
+    picker.textContent="";
+    for(const u of teamUsers.filter(item=>item.enabled)) {
+      const option=document.createElement("option");
+      option.value=u.id;
+      option.textContent=u.name+" · "+u.email;
+      picker.appendChild(option);
+    }
+    $("assignMemberBtn").disabled=!picker.options.length;
+    const list=$("memberList");
+    list.textContent="";
+    for(const member of data.members) {
+      const li=document.createElement("li");
+      const details=document.createElement("span");
+      details.textContent=member.name+" · "+member.email+
+        " — "+(member.role==="editor"?"版本编辑":"只读")+
+        (member.enabled?"":"（账号已停用）");
+      const remove=document.createElement("button");
+      remove.type="button";
+      remove.className="danger";
+      remove.textContent="移除权限";
+      remove.addEventListener("click",async()=>{
+        if(!window.confirm("确定移除该成员对当前项目的访问权限？"))return;
+        try {
+          await api("/api/projects/"+projectId+"/members/"+member.id,{
+            method:"DELETE"
+          });
+          await refreshProjectMembers();
+          feedback("成员项目权限已移除",true);
+        }catch(err){feedback("移除权限失败："+friendlyError(err),false);}
+      });
+      li.append(details,remove);
+      list.appendChild(li);
+    }
+    if(!data.members.length) {
+      const li=document.createElement("li");
+      li.textContent="尚未向成员授权当前项目";
+      list.appendChild(li);
+    }
+  }catch(err){feedback("加载成员权限失败："+friendlyError(err),false);}
+}
+$("openTeamDialog").addEventListener("click",async()=>{
+  if(sessionPrincipal.type!=="admin"||!sessionPrincipal.teamEnabled)return;
+  $("teamCredential").textContent="";
+  $("teamCredentialBox").classList.add("hidden");
+  $("teamUsersDialog").showModal();
+  try{await refreshTeamUsers();}
+  catch(err){feedback("加载团队成员失败："+friendlyError(err),false);}
+});
+$("closeTeamDialog").addEventListener("click",()=>{
+  $("teamUsersDialog").close();
+  $("teamCredential").textContent="";
+  $("teamCredentialBox").classList.add("hidden");
+});
+$("teamUsersDialog").addEventListener("close",()=>{
+  $("teamCredential").textContent="";
+  $("teamCredentialBox").classList.add("hidden");
+});
+$("createTeamUserBtn").addEventListener("click",async()=>{
+  const name=$("newMemberName").value.trim();
+  const email=$("newMemberEmail").value.trim();
+  if(!name||!email){feedback("请填写姓名和邮箱",false);return;}
+  const btn=$("createTeamUserBtn");
+  setBusy(btn,true,"创建中…");
+  try {
+    const result=await api("/api/users",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({name,email})
+    });
+    showIssuedCredential(result.token);
+    $("newMemberName").value="";
+    $("newMemberEmail").value="";
+    await refreshTeamUsers();
+    if(selected && activeTab==="members")await refreshProjectMembers();
+    feedback("成员已创建；凭证仅显示一次，请立即安全保存",true);
+  }catch(err){feedback("创建成员失败："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+$("copyTeamCredential").addEventListener("click",async()=>{
+  const value=$("teamCredential").textContent;
+  if(!value)return;
+  try{await navigator.clipboard.writeText(value);
+    feedback("成员凭证已复制，请仅通过安全渠道传递",true);
+  }catch{feedback("复制失败，请手动选择凭证",false);}
+});
+$("assignMemberBtn").addEventListener("click",async()=>{
+  if(!selected||!$("memberPicker").value)return;
+  const projectId=selected.id;
+  const btn=$("assignMemberBtn");
+  setBusy(btn,true,"保存中…");
+  try{
+    await api("/api/projects/"+projectId+"/members/"+$("memberPicker").value,{
+      method:"PUT",headers:{"content-type":"application/json"},
+      body:JSON.stringify({role:$("memberRole").value})
+    });
+    await refreshProjectMembers();
+    feedback("成员权限已更新",true);
+  }catch(err){feedback("授权失败："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+
 function activateTab(tab) {
-  const supported = ["overview", "versions", "shares", "deploy"];
+  const supported = ["overview", "versions", "shares", "deploy", "members"];
   activeTab = supported.includes(tab) ? tab : "versions";
+  if (sessionPrincipal.type==="member") activeTab="versions";
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const isActive = button.dataset.tab === activeTab;
     button.setAttribute("aria-selected", String(isActive));
@@ -1738,8 +2013,13 @@ function activateTab(tab) {
 
 function openManagePanel(tab) {
   if (!selected) { feedback("请先选择项目", false); return; }
+  if (sessionPrincipal.type==="member" && tab!=="versions") {
+    feedback("该成员无权管理此功能",false);
+    return;
+  }
   activateTab(tab);
-  const labels = {versions:"版本记录",shares:"分享管理",deploy:"自动部署",overview:"项目设置"};
+  if (activeTab==="members") refreshProjectMembers();
+  const labels = {versions:"版本记录",shares:"分享管理",deploy:"自动部署",overview:"项目设置",members:"成员权限"};
   $("manageDialogHeading").textContent = selected.name + " · " + (labels[activeTab] || "项目管理");
   if (!$("manageDialog").open) $("manageDialog").showModal();
 }
@@ -1827,6 +2107,7 @@ $("saveToken").addEventListener("click", async () => {
   if (!token) { feedback("请输入 Token", false); return; }
   try {
     const l = await api("/api/limits");
+    applyPrincipal(await api("/api/me"));
     limits = l.limits ?? null;
     renderUploadQuotas();
     await loadProjects();
@@ -2408,6 +2689,7 @@ if (window.__ARCU_LOCAL_AUTO_LOGIN__ || window.__ARCU_ACCESS_AUTO_LOGIN__) {
   (async () => {
     try {
       const data = await api("/api/limits");
+      applyPrincipal(await api("/api/me"));
       limits = data.limits ?? null;
       renderUploadQuotas();
       await loadProjects();
