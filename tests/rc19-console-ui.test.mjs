@@ -33,7 +33,7 @@ test("RC19 console preserves all business controls and introduces accessible das
     "connectionToggle","tokenInput","saveToken",
     "openCreateDialog","openUploadDialog","projectSearch","lifecycleFilter",
     "projectList","projectListCard","projectCount","detailCard",
-    "inspectorEmpty","emptyCreateBtn","clearProjectSearch",
+    "projectRowTemplate","projectTools","clearProjectSearch",
     "metricAll","metricActive","metricArchived","metricTrashed",
     "openVersionsPanel","openSharesPanel","openDeployPanel","openSettingsPanel",
     "downloadVersionZipBtn","downloadAxureIrBtn","downloadRp1SourceBtn",
@@ -46,7 +46,9 @@ test("RC19 console preserves all business controls and introduces accessible das
   assert.match(html,/data-portfolio-filter="active" aria-pressed="true"/);
   assert.match(html,/role="search" aria-label="搜索和筛选原型项目"/);
   assert.match(html,/id="projectList" aria-busy="false"/);
-  assert.match(html,/aria-label="项目详情引导"/);
+  assert.match(html,/<dialog id="detailCard"[^>]*aria-labelledby="projectHeading"/);
+  assert.match(html,/<details class="project-tools" id="projectTools">/);
+  assert.match(html,/<summary>更多操作/);
   assert.match(html,/<button[^>]*type="button"[^>]*id="clearProjectSearch"/);
   assert.match(html,/id="viewTitle">项目管理/);
   assert.doesNotMatch(html,/innerHTML\s*=\s*p\.name/);
@@ -92,13 +94,12 @@ test("RC19 project selection ignores stale requests if user clicks another proje
   const calls={detail:0,render:0,open:0};
   const nodes={
     githubWorkflowResult:{classList:{add(){} }},
-    inspectorEmpty:{classList:{add(){} }},
     drawerFeedback:{textContent:"previous project"},
     detailCard:{open:false,showModal(){this.open=true;calls.open++;}}
   };
   const state=vm.createContext({
     selectionRequest:0,drawerProjectId:null,
-    selected:null,
+    selected:null,projects:[{id:"A",currentVersion:1},{id:"B",currentVersion:1}],
     versions:[],shares:[],deployKeys:[],selectedVersion:null,
     generatedGithubWorkflow:null,
     $:id=>nodes[id],
@@ -113,7 +114,7 @@ test("RC19 project selection ignores stale requests if user clicks another proje
   const first=vm.runInContext('selectProject("A", {openDetails:true})',state);
   const second=vm.runInContext('selectProject("B")',state);
   const complete=id=>{
-    pending.get("/api/projects/"+id)({id,name:id});
+    pending.get("/api/projects/"+id)({id,name:id,currentVersion:1,isAxure:id==="A"});
     pending.get("/api/projects/"+id+"/versions")({versions:[{version:1,isCurrent:true}]});
     pending.get("/api/projects/"+id+"/shares")({shares:[]});
     pending.get("/api/projects/"+id+"/deploy-keys")({deployKeys:[]});
@@ -132,19 +133,19 @@ test("RC19 project selection ignores stale requests if user clicks another proje
   complete("A");
   await explicit;
   assert.equal(calls.open,1);
+  assert.equal(state.projects[0].isAxure,true);
+  assert.equal(state.projects[1].isAxure,false);
   assert.equal(state.drawerProjectId,"A");
   assert.equal(nodes.drawerFeedback.textContent,"");
 });
 
 test("RC19 responsive design and keyboard search do not override dialogs or token storage policy",async()=>{
   const html=await consoleHtml();
-  assert.match(html,/RC19 — Unified workbench visual language/);
-  assert.match(html,/\.app-sidebar\{background:#151e35/);
-  assert.match(html,/\.portfolio-overview\{display:grid;grid-template-columns:repeat\(4/);
-  assert.match(html,/@media\(max-width:820px\)/);
-  assert.match(html,/@media\(max-width:640px\)/);
-  assert.match(html,/\.app-sidebar\{display:flex;padding:9px 18px/);
-  assert.match(html,/@media\(prefers-reduced-motion:reduce\)/);
+  assert.match(html, /@media \(max-width: 700px\)[^{]*\{[\s\S]*?\.app-sidebar \{ display: none;/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(html, /\.portfolio-overview \{[^}]*display: flex/);
+  assert.match(html, /\.portfolio-tile \{[^}]*white-space: nowrap/);
+  assert.doesNotMatch(html, /button:not\(\.ghost\):not\(\.danger\)/);
   assert.match(html,/const modalOpen = Boolean\(document\.querySelector\("dialog\[open\]"\)\)/);
   assert.match(html,/event\.key === "\/"/);
   assert.match(html,/event\.key === "Escape"/);
@@ -154,4 +155,63 @@ test("RC19 responsive design and keyboard search do not override dialogs or toke
   assert.match(html,/Token lives ONLY in this variable/);
   assert.doesNotMatch(html,/localStorage\.(setItem|getItem)\(/);
   assert.doesNotMatch(html,/sessionStorage\.(setItem|getItem)\(/);
+});
+
+test("switching a project source keeps the other dialog's selection and fields intact", async () => {
+  const html = await consoleHtml();
+  const panels = new Map();
+  function dialog(prefix) {
+    const buttons = ["file", "html"].map(mode => {
+      const id = prefix + "-" + mode;
+      const panel = { hidden: mode !== "file" };
+      panel.classList = { toggle(_name, value) { panel.hidden = value; } };
+      panels.set(id, panel);
+      return {
+        dataset: { uploadMode: mode },
+        getAttribute(name) { assert.equal(name, "aria-controls"); return id; },
+        setAttribute(name, value) { assert.equal(name, "aria-pressed"); this.pressed = value; }
+      };
+    });
+    return { buttons, querySelectorAll() { return buttons; } };
+  }
+  const create = dialog("new");
+  const upload = dialog("version");
+  const context = vm.createContext({ $: id => panels.get(id) });
+  vm.runInContext(functionText(html, "setUploadMode"), context);
+  context.setUploadMode(create, "html");
+  assert.deepEqual(create.buttons.map(button => button.pressed), ["false", "true"]);
+  assert.deepEqual([...panels.values()].map(panel => panel.hidden), [true, false, false, true]);
+  context.setUploadMode(upload, "html");
+  context.setUploadMode(create, "file");
+  assert.deepEqual([...panels.values()].map(panel => panel.hidden), [false, true, true, false]);
+});
+
+test("a file drop updates only the chosen input and reports invalid files inside its dialog", async () => {
+  const html = await consoleHtml();
+  const zone = new EventTarget();
+  zone.classList = { toggle() {} };
+  const input = new EventTarget();
+  const filename = { textContent: "" };
+  const status = { textContent: "" };
+  class Transfer {
+    files = [];
+    items = { add: file => this.files.push(file) };
+  }
+  const ctx = vm.createContext({ DataTransfer: Transfer, Event });
+  vm.runInContext(functionText(html, "bindDropzone"), ctx);
+  ctx.bindDropzone(zone, input, filename, status);
+  function drop(name) {
+    const event = new Event("drop", { cancelable: true });
+    event.dataTransfer = { files: [{ name }] };
+    zone.dispatchEvent(event);
+    assert.ok(event.defaultPrevented);
+  }
+  drop("first.zip");
+  assert.equal(filename.textContent, "first.zip");
+  drop("unrelated.txt");
+  assert.equal(input.files[0].name, "first.zip");
+  assert.match(status.textContent, /仅支持/);
+  drop("second.HTML");
+  assert.equal(filename.textContent, "second.HTML");
+  assert.equal(status.textContent, "");
 });
