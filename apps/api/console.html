@@ -450,6 +450,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 
 /* RC20A: show only the role-appropriate, server-authorized capabilities.
    This is presentation only; API enforces every permission independently. */
+.member-mode #emptyCreateBtn,
 .member-mode #openCreateDialog,
 .member-mode #goShareDetail,
 .member-mode #copyLink,
@@ -884,6 +885,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 let token = null;
 // Shared connection state: supports either a manual bearer token or a local HttpOnly session.
 let isAuthorized = false;
+let sessionPrincipal = {type:"admin",teamEnabled:false};
+let teamUsers = [];
 let projects = [];
 let selected = null;
 let versions = [];
@@ -1073,6 +1076,39 @@ function setBusy(btn, busy, busyLabel) {
   }
 }
 
+function applyPrincipal(identity) {
+  const previous=sessionPrincipal;
+  sessionPrincipal=identity || {type:"admin",teamEnabled:false};
+  const member=sessionPrincipal.type==="member";
+  const adminTeam=sessionPrincipal.type==="admin" && sessionPrincipal.teamEnabled===true;
+  if (previous.type!==sessionPrincipal.type ||
+      previous.user?.id!==sessionPrincipal.user?.id) {
+    resetSelectedProject();
+    activeTab="versions";
+  }
+  document.body.classList.toggle("member-mode",member);
+  document.body.classList.toggle("viewer-mode",member && selected?.role!=="editor");
+  $("openTeamDialog").classList.toggle("hidden",!adminTeam);
+  $("membersTab").classList.toggle("hidden",!adminTeam);
+  $("viewSubtitle").textContent=member
+    ? "按项目授权访问 · 账号凭证仅存于当前会话"
+    : "集中管理原型、版本、分享和网站发布";
+  $("memberAccessInfo").classList.toggle("hidden",!member);
+  if(member) {
+    $("memberAccessInfo").textContent=
+      sessionPrincipal.user.name+" · "+
+      (selected?.role==="editor"?"版本编辑":"只读权限")+
+      " · 管理员单独授权分享/发布";
+    $("inspectorEmpty").querySelector("h2").textContent="选择已授权项目";
+    $("inspectorEmpty").querySelector("p").textContent=
+      "只可访问管理员授权的项目和允许的版本操作。";
+  } else {
+    $("inspectorEmpty").querySelector("h2").textContent="选择一个项目";
+    $("inspectorEmpty").querySelector("p").textContent=
+      "查看原型预览、历史版本、分享链接、部署及 Axure 转换工具。";
+  }
+}
+
 function setAuthorized(ok) {
   isAuthorized = Boolean(ok);
   $("authBadge").textContent = ok
@@ -1084,6 +1120,7 @@ function setAuthorized(ok) {
   $("tokenbar").classList.toggle("collapsed", ok);
   $("connectionToggle").setAttribute("aria-expanded", String(!ok));
   if (ok) $("tokenInput").value = "";
+  else applyPrincipal({type:"admin",teamEnabled:false});
   else if (projectListLoaded) {
     // An expired or rejected authorization must not keep stale counts visible.
     projects = [];
@@ -1308,14 +1345,16 @@ function renderProjects() {
 async function selectProject(id) {
   const request = ++selectionRequest;
   try {
+    const member=sessionPrincipal.type==="member";
     const [project, versionData, shareData, keyData] = await Promise.all([
       api("/api/projects/" + id),
       api("/api/projects/" + id + "/versions"),
-      api("/api/projects/" + id + "/shares"),
-      api("/api/projects/" + id + "/deploy-keys")
+      member?Promise.resolve({shares:[]}):api("/api/projects/" + id + "/shares"),
+      member?Promise.resolve({deployKeys:[]}):api("/api/projects/" + id + "/deploy-keys")
     ]);
     if (request !== selectionRequest) return;
     selected = project;
+    applyPrincipal(sessionPrincipal);
     versions = versionData.versions;
     shares = shareData.shares;
     deployKeys = keyData.deployKeys;
@@ -1784,8 +1823,9 @@ $("copyNewDeployKey").addEventListener("click", async () => {
 
 
 function activateTab(tab) {
-  const supported = ["overview", "versions", "shares", "deploy"];
+  const supported = ["overview", "versions", "shares", "deploy", "members"];
   activeTab = supported.includes(tab) ? tab : "versions";
+  if (sessionPrincipal.type==="member") activeTab="versions";
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const isActive = button.dataset.tab === activeTab;
     button.setAttribute("aria-selected", String(isActive));
@@ -1798,8 +1838,13 @@ function activateTab(tab) {
 
 function openManagePanel(tab) {
   if (!selected) { feedback("请先选择项目", false); return; }
+  if (sessionPrincipal.type==="member" && tab!=="versions") {
+    feedback("该成员无权管理此功能",false);
+    return;
+  }
   activateTab(tab);
-  const labels = {versions:"版本记录",shares:"分享管理",deploy:"自动部署",overview:"项目设置"};
+  if (activeTab==="members") refreshProjectMembers();
+  const labels = {versions:"版本记录",shares:"分享管理",deploy:"自动部署",overview:"项目设置",members:"成员权限"};
   $("manageDialogHeading").textContent = selected.name + " · " + (labels[activeTab] || "项目管理");
   if (!$("manageDialog").open) $("manageDialog").showModal();
 }
@@ -1887,6 +1932,7 @@ $("saveToken").addEventListener("click", async () => {
   if (!token) { feedback("请输入 Token", false); return; }
   try {
     const l = await api("/api/limits");
+    applyPrincipal(await api("/api/me"));
     limits = l.limits ?? null;
     renderUploadQuotas();
     await loadProjects();
@@ -2468,6 +2514,7 @@ if (window.__ARCU_LOCAL_AUTO_LOGIN__ || window.__ARCU_ACCESS_AUTO_LOGIN__) {
   (async () => {
     try {
       const data = await api("/api/limits");
+      applyPrincipal(await api("/api/me"));
       limits = data.limits ?? null;
       renderUploadQuotas();
       await loadProjects();
