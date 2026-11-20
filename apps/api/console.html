@@ -1135,7 +1135,7 @@ function applyPrincipal(identity) {
   $("openTeamDialog").classList.toggle("hidden",!adminTeam);
   $("membersTab").classList.toggle("hidden",!adminTeam);
   $("viewSubtitle").textContent=member
-    ? "按项目授权访问 · 账号凭证仅存于当前会话"
+    ? "按项目授权访问 · 账号会话仅限当前浏览器"
     : "集中管理原型、版本、分享和网站发布";
   $("memberAccessInfo").classList.toggle("hidden",!member);
   if(member) {
@@ -1921,6 +1921,22 @@ async function refreshTeamUsers() {
       }catch(err){feedback("重置失败："+friendlyError(err),false);}
     });
     actions.append(toggle,rotate);
+    if(sessionPrincipal.memberLoginEnabled===true) {
+      const invite=document.createElement("button");
+      invite.type="button";
+      invite.className="ghost";
+      invite.textContent=u.passwordSet?"重置密码码":"生成激活码";
+      invite.title="一次性激活码 24 小时有效；不会自动发送邮箱";
+      invite.addEventListener("click",async()=>{
+        if(!window.confirm("将向该成员生成新的24小时有效激活码；旧激活码失效。继续？"))return;
+        try{
+          const result=await api("/api/users/"+u.id+"/invite",{method:"POST"});
+          showIssuedCredential(result.code);
+          feedback("已生成一次性激活码，请通过安全渠道发送给该成员",true);
+        }catch(err){feedback("生成激活码失败："+friendlyError(err),false);}
+      });
+      actions.appendChild(invite);
+    }
     li.append(info,actions);
     list.appendChild(li);
   }
