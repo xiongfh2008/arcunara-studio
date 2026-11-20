@@ -159,7 +159,7 @@ export function matchNavSearch(pages, query) {
 // ever injected into this platform page. `base` is the URL prefix all page
 // links are built under (share-scoped links keep the token on every
 // subresource request automatically via relative URL resolution).
-export function renderNavPage(base, pages) {
+export function renderNavPage(base, pages, { nativeOrigin = null } = {}) {
   const items = pages.map((page) => ({
     name: page.replace(/\.html?$/i, ""),
     href: encodePreviewPath(base, page)
@@ -169,6 +169,11 @@ export function renderNavPage(base, pages) {
   // name cannot break out of the script element.
   const payload = JSON.stringify(items).replace(/</g, "\\u003c");
   const first = items.length > 0 ? items[0].href : "";
+  // Only share-capability URLs may open the separate native origin. Never
+  // export a bare UUID /p path or a native player on the admin hostname.
+  const nativeHref = nativeOrigin && /^\\/s\\/[0-9a-f]{16}\\.[A-Za-z0-9_-]{43}$/.test(base)
+    ? `${nativeOrigin}${base}/index.html`
+    : null;
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -217,6 +222,7 @@ export function renderNavPage(base, pages) {
   <span class="tag" id="count"></span>
   <span class="spacer"></span>
   <a id="openStandalone" href="#" target="_blank" rel="noopener noreferrer">独立页面</a>
+  ${nativeHref ? `<a id="nativeAxurePlayer" href="${nativeHref}" target="_blank" rel="noopener noreferrer">Axure 原生播放器（独立隔离）</a>` : ""}
 </header>
 <main>
   <nav aria-label="业务页面目录">
