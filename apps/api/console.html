@@ -1822,6 +1822,178 @@ $("copyNewDeployKey").addEventListener("click", async () => {
 });
 
 
+// RC20A: all team operations are admin-only at the API boundary. Tokens
+// are visible in this dialog only after explicit create/rotation and erased
+// when the dialog closes; never placed in a URL or browser storage.
+function showIssuedCredential(value) {
+  $("teamCredential").textContent=value;
+  $("teamCredentialBox").classList.remove("hidden");
+}
+async function refreshTeamUsers() {
+  if(sessionPrincipal.type!=="admin"||sessionPrincipal.teamEnabled!==true)return;
+  const data=await api("/api/users");
+  teamUsers=data.users;
+  const list=$("teamUsersList");
+  list.textContent="";
+  for(const u of teamUsers) {
+    const li=document.createElement("li");
+    const info=document.createElement("span");
+    const strong=document.createElement("strong");
+    strong.textContent=u.name+" · "+u.email;
+    const status=document.createElement("small");
+    status.textContent=u.enabled?"已启用":"已停用";
+    info.append(strong,status);
+    const actions=document.createElement("span");
+    actions.className="row";
+    const toggle=document.createElement("button");
+    toggle.type="button";
+    toggle.className="ghost";
+    toggle.textContent=u.enabled?"停用":"启用";
+    toggle.addEventListener("click",async()=>{
+      if(u.enabled && !window.confirm("确定停用此成员？当前访问凭证将立即失效。"))return;
+      try {
+        await api("/api/users/"+u.id,{
+          method:"PATCH",headers:{"content-type":"application/json"},
+          body:JSON.stringify({enabled:!u.enabled})
+        });
+        await refreshTeamUsers();
+        if(selected && activeTab==="members") await refreshProjectMembers();
+      }catch(err){feedback("更新成员状态失败："+friendlyError(err),false);}
+    });
+    const rotate=document.createElement("button");
+    rotate.type="button";
+    rotate.className="ghost";
+    rotate.textContent="重置凭证";
+    rotate.addEventListener("click",async()=>{
+      if(!window.confirm("将立即使该成员旧凭证失效。确定生成新凭证？"))return;
+      try {
+        const result=await api("/api/users/"+u.id+"/rotate-token",{method:"POST"});
+        showIssuedCredential(result.token);
+        feedback("已轮换凭证，请安全发送给该成员",true);
+      }catch(err){feedback("重置失败："+friendlyError(err),false);}
+    });
+    actions.append(toggle,rotate);
+    li.append(info,actions);
+    list.appendChild(li);
+  }
+  if(!teamUsers.length) {
+    const item=document.createElement("li");
+    item.textContent="还没有团队成员";
+    list.appendChild(item);
+  }
+}
+async function refreshProjectMembers() {
+  if (!selected || sessionPrincipal.type!=="admin" ||
+      sessionPrincipal.teamEnabled!==true) return;
+  const projectId=selected.id;
+  try {
+    const [users,data]=await Promise.all([
+      api("/api/users"),
+      api("/api/projects/"+projectId+"/members")
+    ]);
+    if(!selected || selected.id!==projectId)return;
+    teamUsers=users.users;
+    const picker=$("memberPicker");
+    picker.textContent="";
+    for(const u of teamUsers.filter(item=>item.enabled)) {
+      const option=document.createElement("option");
+      option.value=u.id;
+      option.textContent=u.name+" · "+u.email;
+      picker.appendChild(option);
+    }
+    $("assignMemberBtn").disabled=!picker.options.length;
+    const list=$("memberList");
+    list.textContent="";
+    for(const member of data.members) {
+      const li=document.createElement("li");
+      const details=document.createElement("span");
+      details.textContent=member.name+" · "+member.email+
+        " — "+(member.role==="editor"?"版本编辑":"只读")+
+        (member.enabled?"":"（账号已停用）");
+      const remove=document.createElement("button");
+      remove.type="button";
+      remove.className="danger";
+      remove.textContent="移除权限";
+      remove.addEventListener("click",async()=>{
+        if(!window.confirm("确定移除该成员对当前项目的访问权限？"))return;
+        try {
+          await api("/api/projects/"+projectId+"/members/"+member.id,{
+            method:"DELETE"
+          });
+          await refreshProjectMembers();
+          feedback("成员项目权限已移除",true);
+        }catch(err){feedback("移除权限失败："+friendlyError(err),false);}
+      });
+      li.append(details,remove);
+      list.appendChild(li);
+    }
+    if(!data.members.length) {
+      const li=document.createElement("li");
+      li.textContent="尚未向成员授权当前项目";
+      list.appendChild(li);
+    }
+  }catch(err){feedback("加载成员权限失败："+friendlyError(err),false);}
+}
+$("openTeamDialog").addEventListener("click",async()=>{
+  if(sessionPrincipal.type!=="admin"||!sessionPrincipal.teamEnabled)return;
+  $("teamCredential").textContent="";
+  $("teamCredentialBox").classList.add("hidden");
+  $("teamUsersDialog").showModal();
+  try{await refreshTeamUsers();}
+  catch(err){feedback("加载团队成员失败："+friendlyError(err),false);}
+});
+$("closeTeamDialog").addEventListener("click",()=>{
+  $("teamUsersDialog").close();
+  $("teamCredential").textContent="";
+  $("teamCredentialBox").classList.add("hidden");
+});
+$("teamUsersDialog").addEventListener("close",()=>{
+  $("teamCredential").textContent="";
+  $("teamCredentialBox").classList.add("hidden");
+});
+$("createTeamUserBtn").addEventListener("click",async()=>{
+  const name=$("newMemberName").value.trim();
+  const email=$("newMemberEmail").value.trim();
+  if(!name||!email){feedback("请填写姓名和邮箱",false);return;}
+  const btn=$("createTeamUserBtn");
+  setBusy(btn,true,"创建中…");
+  try {
+    const result=await api("/api/users",{
+      method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({name,email})
+    });
+    showIssuedCredential(result.token);
+    $("newMemberName").value="";
+    $("newMemberEmail").value="";
+    await refreshTeamUsers();
+    if(selected && activeTab==="members")await refreshProjectMembers();
+    feedback("成员已创建；凭证仅显示一次，请立即安全保存",true);
+  }catch(err){feedback("创建成员失败："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+$("copyTeamCredential").addEventListener("click",async()=>{
+  const value=$("teamCredential").textContent;
+  if(!value)return;
+  try{await navigator.clipboard.writeText(value);
+    feedback("成员凭证已复制，请仅通过安全渠道传递",true);
+  }catch{feedback("复制失败，请手动选择凭证",false);}
+});
+$("assignMemberBtn").addEventListener("click",async()=>{
+  if(!selected||!$("memberPicker").value)return;
+  const projectId=selected.id;
+  const btn=$("assignMemberBtn");
+  setBusy(btn,true,"保存中…");
+  try{
+    await api("/api/projects/"+projectId+"/members/"+$("memberPicker").value,{
+      method:"PUT",headers:{"content-type":"application/json"},
+      body:JSON.stringify({role:$("memberRole").value})
+    });
+    await refreshProjectMembers();
+    feedback("成员权限已更新",true);
+  }catch(err){feedback("授权失败："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+
 function activateTab(tab) {
   const supported = ["overview", "versions", "shares", "deploy", "members"];
   activeTab = supported.includes(tab) ? tab : "versions";
