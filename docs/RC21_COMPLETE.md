@@ -36,7 +36,7 @@ ARCU_AI_API_KEY_FILE=/run/secrets/ai_api_key
 ```
 
 - 默认 `0`，不调用付费接口，也不生成虚假示例。
-- 固定服务商 DeepSeek、固定 HTTPS `https://api.deepseek.com/chat/completions`、固定模型 `deepseek-chat`；密钥必须放在服务器绝对路径的只读文件中，**不要发送到聊天、提交到 GitHub 或写入浏览器 LocalStorage**。
+- 固定服务商 DeepSeek、固定 HTTPS `https://api.deepseek.com/chat/completions`、固定模型 `deepseek-flash`；密钥必须放在服务器绝对路径的只读文件中，**不要发送到聊天、提交到 GitHub 或写入浏览器 LocalStorage**。
 - 单次提示词最多 2400 字，模型最大输出 4096 tokens、45 秒超时，返回 HTML 最多 180000 UTF-8 字节；每服务进程 UTC 日上限 20 次、同时最多 1 次调用。
 - AI 请求消耗实际服务商费用，失败请求也占本进程调用额度。当前仅进程内上限，重启会重置计数，尚不是可用于商业公开服务的持久化账单预算/统一限流。
 - 不包含模型注册页、模型切换、AI 代码补丁代理、多轮上下文聊天、自动测试生成、付费积分计费或邮箱通知。若要开放给付费用户需另设数据库计量、异步任务和成本上限。
