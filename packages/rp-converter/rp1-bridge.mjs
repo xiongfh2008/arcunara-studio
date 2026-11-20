@@ -59,18 +59,22 @@ function safeAssetPath(name) {
 function nativeStyle(node, out, warnings, label) {
   const style = node.style;
   if (!plain(style)) return;
+  // RP/1 is strict: labels/paragraphs do NOT accept fills/radii and images
+  // do not accept text styling. Only add properties documented for the type.
+  const isText = ["label","paragraph","button","input"].includes(out.type);
+  const isBoxStyle = ["button","input"].includes(out.type);
   const fg = color(style.color);
   const bg = color(style.backgroundColor);
-  if (fg) out.color = fg;
+  if (isText && fg) out.color = fg;
   else if (style.color !== undefined) warnings.add("STYLE_COLOR_DROPPED:" + label);
-  if (bg) out.fill = bg;
+  if (isBoxStyle && bg) out.fill = bg;
   else if (style.backgroundColor !== undefined) warnings.add("STYLE_BACKGROUND_DROPPED:" + label);
   const font = finitePixel(style.fontSize, 120);
-  if (font && font >= 8) out.fontSize = font;
+  if (isText && font && font >= 8) out.fontSize = font;
   const radius = finitePixel(style.borderRadius, 100);
-  if (radius !== null) out.radius = radius;
-  if (["bold", "600", "700", "800"].includes(style.fontWeight)) out.fontWeight = 700;
-  else if (style.fontWeight === "500") out.fontWeight = 500;
+  if (isBoxStyle && radius !== null) out.radius = radius;
+  if (isText && ["bold", "600", "700", "800"].includes(style.fontWeight)) out.fontWeight = 700;
+  else if (isText && style.fontWeight === "500") out.fontWeight = 500;
 }
 
 function geometry(node, position, warnings, label) {
