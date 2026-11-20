@@ -3036,6 +3036,116 @@ $("downloadRp1SourceBtn").addEventListener("click", async () => {
   }
 });
 
+
+// RC21A editor — HTML stays in the isolated <textarea> and script-disabled
+// <iframe sandbox="">. Publishing is compare-and-swap against source SHA-256,
+// so a concurrent AI deploy cannot silently replace edits.
+let htmlEditorBase=null;
+function htmlEditorBytes(value) {
+  return new TextEncoder().encode(value).byteLength;
+}
+function htmlEditorSetCount() {
+  const bytes=htmlEditorBytes($("htmlEditorSource").value);
+  $("htmlEditorByteCount").textContent=bytes.toLocaleString()+" / 180,000 bytes";
+  $("htmlEditorByteCount").style.color=bytes>180000?"var(--err)":"var(--muted)";
+}
+function htmlEditorStaticPreview() {
+  const policy="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'\">";
+  const html=$("htmlEditorSource").value;
+  $("htmlEditorPreview").srcdoc="<!doctype html><head>"+policy+"</head>"+html;
+}
+function closeHtmlEditor(force=false) {
+  if(!force && htmlEditorBase &&
+      $("htmlEditorSource").value!==htmlEditorBase.html &&
+      !window.confirm("存在未保存的 HTML 修改，确定关闭并放弃草稿？")) return false;
+  $("htmlEditorDialog").close();
+  return true;
+}
+function clearHtmlEditor() {
+  $("htmlEditorPreview").srcdoc="";
+  $("htmlEditorSource").value="";
+  $("htmlEditorStatus").textContent="";
+  htmlEditorBase=null;
+}
+$("openHtmlEditorBtn").addEventListener("click",async()=>{
+  if(!selected) {feedback("请先选择项目",false);return;}
+  const projectId=selected.id;
+  const btn=$("openHtmlEditorBtn");
+  setBusy(btn,true,"读取 HTML…");
+  try{
+    const source=await api("/api/projects/"+projectId+"/html-editor");
+    if(!selected || selected.id!==projectId)return;
+    htmlEditorBase=source;
+    $("htmlEditorSource").value=source.html;
+    $("htmlEditorSource").readOnly=
+      sessionPrincipal.type==="member" && selected.role!=="editor";
+    $("publishHtmlEditorBtn").disabled=$("htmlEditorSource").readOnly;
+    $("htmlEditorVersion").textContent="源版本 v"+source.version+" · "+source.entryPoint;
+    $("htmlEditorStatus").textContent=$("htmlEditorSource").readOnly
+      ? "只读成员可查看源代码；请联系项目管理员或编辑成员更新。"
+      : "编辑后保存为新版本；已有版本保留，可以在版本记录中回滚。";
+    htmlEditorSetCount();
+    htmlEditorStaticPreview();
+    $("htmlEditorDialog").showModal();
+  }catch(err) {
+    const code=err?.json?.code;
+    feedback(code==="EDITOR_MULTIFILE_UNSUPPORTED"
+      ?"此项目包含多个文件，请使用 ZIP 上传更新，以免丢失图片/CSS/JS。"
+      :"打开 HTML 编辑器失败："+friendlyError(err),false);
+  }finally{setBusy(btn,false);}
+});
+$("htmlEditorSource").addEventListener("input",()=>{
+  htmlEditorSetCount();
+  $("htmlEditorStatus").textContent="草稿已修改；点击“刷新安全预览”查看静态效果。";
+});
+$("htmlEditorPreviewBtn").addEventListener("click",()=>{
+  if(!htmlEditorBase)return;
+  htmlEditorStaticPreview();
+  $("htmlEditorStatus").textContent="已刷新静态草稿预览（JS、外部资源和表单均被阻止）。";
+});
+$("closeHtmlEditorBtn").addEventListener("click",()=>closeHtmlEditor());
+$("cancelHtmlEditorBtn").addEventListener("click",()=>closeHtmlEditor());
+$("htmlEditorDialog").addEventListener("cancel",event=>{
+  if(htmlEditorBase && $("htmlEditorSource").value!==htmlEditorBase.html &&
+     !window.confirm("草稿尚未保存，确定关闭？"))event.preventDefault();
+});
+$("htmlEditorDialog").addEventListener("close",clearHtmlEditor);
+$("publishHtmlEditorBtn").addEventListener("click",async()=>{
+  if(!htmlEditorBase || !selected || selected.id!==htmlEditorBase.projectId)return;
+  if(sessionPrincipal.type==="member"&&selected.role!=="editor"){
+    feedback("当前项目为只读权限",false);return;
+  }
+  const html=$("htmlEditorSource").value;
+  if(htmlEditorBytes(html)>180000 || !html.toLowerCase().includes("<html")){
+    $("htmlEditorStatus").textContent="保存失败：需要有效 HTML，且最多 180000 UTF-8 字节。";
+    return;
+  }
+  const btn=$("publishHtmlEditorBtn");
+  setBusy(btn,true,"正在安全保存…");
+  try{
+    const result=await api("/api/projects/"+htmlEditorBase.projectId+"/html-editor/publish",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({baseVersion:htmlEditorBase.version,
+        baseSha256:htmlEditorBase.sha256,html})
+    });
+    const id=htmlEditorBase.projectId;
+    closeHtmlEditor(true);
+    if(result.unchanged){
+      feedback("没有内容变化，未创建重复版本。",true);
+      return;
+    }
+    await selectProject(id);
+    await loadProjects();
+    feedback("HTML 已保存为 v"+result.version+"；原有版本未覆盖。",true);
+  }catch(err){
+    if(err?.json?.code==="EDITOR_VERSION_CONFLICT"){
+      $("htmlEditorStatus").textContent="保存冲突：项目已被其他更新覆盖。草稿仍在，请先复制保存草稿，然后重新读取最新版本。";
+    }else{
+      $("htmlEditorStatus").textContent="保存失败："+friendlyError(err);
+    }
+  }finally{setBusy(btn,false);}
+});
+
 </script>
 </body>
 </html>
