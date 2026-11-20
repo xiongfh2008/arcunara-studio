@@ -481,6 +481,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .credential-once{display:block;overflow-wrap:anywhere;background:#f1f4ff;border:1px solid #dce4f7;border-radius:10px;padding:13px;margin:7px 0;font-size:12px}
 #teamCredentialBox{margin-top:15px}
 #memberAccessInfo{margin-top:8px;color:#5461a1}
+
+/* RC20B: member password activation and sign-in */
+[data-member-auth-panel]{margin-top:16px}
+[data-member-auth-tab][aria-selected="true"]{background:#e9edff;color:#3c4bb2;border-color:#bfc9ff}
+#memberAuthStatus{margin-top:10px;color:#56658e}
+#memberAccountDialog .create-dialog-content{max-height:74vh;overflow:auto}
+#memberAccountDialog input{width:100%}
 </style>
 </head>
 <body>
@@ -506,6 +513,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   // Boolean only: no administrator credential is ever injected into HTML.
   window.__ARCU_LOCAL_AUTO_LOGIN__ = __ARCU_LOCAL_MODE_VALUE__;
   window.__ARCU_ACCESS_AUTO_LOGIN__ = __ARCU_ACCESS_MODE_VALUE__;
+  window.__ARCU_MEMBER_LOGIN_ENABLED__ = __ARCU_MEMBER_LOGIN_MODE_VALUE__;
   window.__ARCU_STAGING_PUBLIC_PREVIEW__ = __ARCU_PUBLIC_PREVIEW_MODE_VALUE__;
   window.__ARCU_SITE_DOMAIN__ = __ARCU_SITE_DOMAIN_VALUE__;
 </script>
@@ -520,6 +528,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 <div class="tokenbar" id="tokenbar">
   <input type="password" id="tokenInput" placeholder="粘贴 API Token（仅保存在内存中，刷新即失效）" autocomplete="off">
   <button id="saveToken">连接</button>
+  <button type="button" class="ghost hidden" id="openMemberLoginBtn">邮箱登录 / 激活</button>
+  <button type="button" class="ghost hidden" id="changeMyPasswordBtn">修改密码</button>
+  <button type="button" class="ghost hidden" id="memberLogoutBtn">退出登录</button>
   <span class="hint">本地开发使用独立临时 Cookie；启用 Cloudflare Access 后由服务器验证登录身份。手动 Token 不保存在浏览器存储中。</span>
 </div>
 
@@ -643,6 +654,34 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     </div>
   </main>
 </div>
+<dialog class="create-dialog" id="memberAccountDialog" aria-labelledby="memberAccountHeading">
+  <div class="create-dialog-header"><h2 id="memberAccountHeading">团队账号登录</h2><button type="button" class="ghost" id="closeMemberAccountDialog">关闭</button></div>
+  <div class="create-dialog-content">
+    <p class="hint">仅限管理员邀请的账号。激活码由管理员单独发送，不支持公开注册；密码不会保存在浏览器存储中。</p>
+    <div class="row" role="tablist" aria-label="账号操作">
+      <button type="button" class="ghost" data-member-auth-tab="login" aria-selected="true">登录</button>
+      <button type="button" class="ghost" data-member-auth-tab="activate" aria-selected="false">首次激活 / 重置</button>
+      <button type="button" class="ghost" data-member-auth-tab="change" aria-selected="false">修改密码</button>
+    </div>
+    <div data-member-auth-panel="login">
+      <label class="field"><span>邮箱</span><input id="memberLoginEmail" type="email" maxlength="254" autocomplete="username"></label>
+      <label class="field"><span>密码</span><input id="memberLoginPassword" type="password" minlength="12" maxlength="128" autocomplete="current-password"></label>
+      <button type="button" id="submitMemberLogin">登录工作台</button>
+    </div>
+    <div class="hidden" data-member-auth-panel="activate">
+      <label class="field"><span>受邀邮箱</span><input id="memberInviteEmail" type="email" maxlength="254" autocomplete="email"></label>
+      <label class="field"><span>管理员提供的一次性激活码</span><input id="memberInviteCode" type="text" maxlength="90" autocomplete="off"></label>
+      <label class="field"><span>设置密码（12–128 字符）</span><input id="memberSetPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password"></label>
+      <button type="button" id="submitMemberActivate">激活 / 重置密码</button>
+    </div>
+    <div class="hidden" data-member-auth-panel="change">
+      <label class="field"><span>当前密码</span><input id="memberOldPassword" type="password" autocomplete="current-password"></label>
+      <label class="field"><span>新密码（12–128 字符）</span><input id="memberNextPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password"></label>
+      <button type="button" id="submitMemberChangePassword">修改并退出所有会话</button>
+    </div>
+    <p class="hint" id="memberAuthStatus" aria-live="polite"></p>
+  </div>
+</dialog>
 <dialog class="create-dialog" id="teamUsersDialog" aria-labelledby="teamUsersHeading">
   <div class="create-dialog-header"><h2 id="teamUsersHeading">团队成员管理</h2><button type="button" class="ghost" id="closeTeamDialog">关闭</button></div>
   <div class="create-dialog-content">
