@@ -13,6 +13,7 @@ import { parseMultipartUpload } from "./multipart.mjs";
 import { stageFromUpload } from "./staging.mjs";
 import { inspectAxureProject } from "./axure.mjs";
 import { analyzeAxureReadiness } from "./axure-readiness.mjs";
+import { buildEditableIR } from "../../../packages/rp-converter/ir.mjs";
 import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { compareProjectVersions } from "./version-diff.mjs";
 import { exportProjectVersionZip } from "./zip-export.mjs";
@@ -24,6 +25,7 @@ const PROJECT_ID = "([0-9a-f-]{36})";
 const DETAIL_RE = new RegExp(`^/api/projects/${PROJECT_ID}$`);
 const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
+const AXURE_IR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-ir$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions$`);
 const VERSION_EXPORT_RE = new RegExp(`^/api/projects/${PROJECT_ID}/export$`);
@@ -273,6 +275,21 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         }
         const version = rawVersion === null ? undefined : Number(rawVersion);
         return sendJson(res, 200, await analyzeAxureReadiness(store, readinessMatch[1], version));
+      }
+
+      // RC18A: mapped editable-candidate JSON is NOT a native .rp file.
+      // Existing admin auth applies; dpk_ deploy keys are excluded.
+      const irMatch = AXURE_IR_RE.exec(pathname);
+      if (irMatch && req.method === "GET") {
+        const query = new URL(req.url || "/", "http://localhost").searchParams;
+        const values = query.getAll("version");
+        if (values.length > 1 || (values.length === 1 &&
+            !/^[1-9][0-9]*$/.test(values[0]))) {
+          throw new ApiError(400, "Invalid version", "INVALID_VERSION");
+        }
+        const requested = values.length ? Number(values[0]) : undefined;
+        const report = await buildEditableIR(store, irMatch[1], requested);
+        return sendJson(res, 200, report);
       }
 
       // GitHub integration is opt-in: provide a downloadable workflow only.
