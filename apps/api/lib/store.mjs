@@ -272,8 +272,10 @@ export function createStore(config) {
       // existing projects never lose their open preview behavior).
       previewEnabled: meta.previewEnabled !== false && meta.lifecycleState !== "trashed",
       siteEnabled: meta.siteEnabled === true && meta.lifecycleState !== "trashed",
-      siteVersion: meta.siteEnabled === true ? (meta.siteVersion ?? entry.version) : null,
-      hasUnpublishedChanges: meta.siteEnabled === true && Number.isSafeInteger(meta.siteVersion) && meta.siteVersion !== entry.version,
+      ...(meta.siteEnabled === true ? {
+        siteVersion: meta.siteVersion ?? entry.version,
+        hasUnpublishedChanges: Number.isSafeInteger(meta.siteVersion) && meta.siteVersion !== entry.version
+      } : {}),
       lifecycleState: meta.lifecycleState || "active",
       archivedAt: meta.archivedAt ?? null,
       trashedAt: meta.trashedAt ?? null
@@ -410,7 +412,7 @@ export function createStore(config) {
       // RC21A compare-and-swap is checked INSIDE this project write lock.
       // A concurrent upload, editor save or rollback cannot silently replace
       // the snapshot the editor originally loaded.
-      if (expectedCurrentVersion !== undefined) {
+      if (expectedCurrentVersion !== undefined && expectedManifestHash === undefined) {
         if (!Number.isSafeInteger(expectedCurrentVersion) ||
             expectedCurrentVersion < 1 ||
             !CONTENT_HASH_RE.test(expectedSourceSha256 || "")) {
