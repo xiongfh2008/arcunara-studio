@@ -19,7 +19,7 @@ test("RC20A is off by default and preserves existing administrator and deploy-ke
       html:"<html><body>Old API</body></html>"}));
     assert.equal(c.status,201);
     const id=c.json.id;
-    assert.deepEqual((await app.api("/api/me")).json,{type:"admin"});
+    assert.deepEqual((await app.api("/api/me")).json,{type:"admin",teamEnabled:false});
     assert.equal((await app.api("/api/users")).status,404);
     assert.equal((await app.api("/api/users",post({name:"N",email:"n@example.com"}))).status,404);
     assert.equal((await app.api("/api/projects/"+id+"/members")).status,404);
