@@ -25,7 +25,7 @@ function digest(secret) {
 }
 function safeUser(user) {
   return {id:user.id,email:user.email,name:user.name,
-    enabled:user.enabled !== false,createdAt:user.createdAt,
+    enabled:user.enabled !== false,passwordSet:Boolean(user.passwordHash),createdAt:user.createdAt,
     updatedAt:user.updatedAt};
 }
 function newRegistry() {
