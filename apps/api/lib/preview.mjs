@@ -19,7 +19,7 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import { isValidSegment, safeJoin } from "./pathsafety.mjs";
-import { inspectAxureProject, renderNavPage } from "./axure.mjs";
+import { inspectAxureProject, renderNavPage, isAxurePlayerShellPath, axurePlayerRedirect } from "./axure.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
 
 const PREVIEW_RE = /^\/p\/([0-9a-f-]{36})(\/.*)?$/;
@@ -120,6 +120,7 @@ function redirect(res, location) {
   res.writeHead(302, {
     Location: location,
     "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff"
   });
   res.end();
@@ -249,7 +250,7 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
   // Shared serving core for /p/{id}/... and /s/{token}/...: resolves the
   // current version directory for `id`, serves the Axure nav page or the
   // requested file. All path-safety rules are identical on both routes.
-  async function serveProjectPath(res, id, basePath, rest, { headOnly = false } = {}) {
+  async function serveProjectPath(res, id, basePath, rest, { headOnly = false, search = "" } = {}) {
     const lifecycleMeta = await store.readRawMeta(id);
     if (!lifecycleMeta || lifecycleMeta.lifecycleState === "trashed") return notFound(res);
     const dir = await lookupProjectDir(id);
@@ -258,16 +259,15 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
       return notFound(res);
     }
 
-    if (rest === "/") {
+    if (rest === "/" || isAxurePlayerShellPath(rest)) {
       const meta = await store.readRawMeta(id);
       const entry = await store.currentVersionEntry(id, meta);
       const sourceDir = store.versionSourceDir(id, entry);
 
-      // Axure exports land on the platform safe-preview directory page;
-      // the native index.html player stays reachable at its plain URL
-      // ({base}/index.html) for debugging. Everything else — non-Axure
-      // projects and Axure exports without business pages — keeps the
-      // RC2 entry behavior unchanged.
+      // Axure player shells fail in the opaque-origin sandbox. Serve the
+      // platform navigation at root, and redirect legacy player URLs to it
+      // (preserving a listed ?p= business-page selection). Ordinary HTML
+      // prototypes retain their original entry behavior.
       let axure = null;
 
       try {
@@ -278,6 +278,9 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
       }
 
       if (axure && axure.isAxure && axure.pages.length > 0) {
+        if (rest !== "/") {
+          return redirect(res, axurePlayerRedirect(basePath, axure.pages, search));
+        }
         const html = renderNavPage(basePath, axure.pages);
         res.writeHead(200, {
           ...NAV_HEADERS,
@@ -289,7 +292,9 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
         return res.end(html);
       }
 
-      return await serveEntry(res, basePath, dir, entry.entryPoint, { headOnly });
+      if (rest === "/") {
+        return await serveEntry(res, basePath, dir, entry.entryPoint, { headOnly });
+      }
     }
 
     // Split RAW path (literal "/" only), then decode each segment —
@@ -340,7 +345,9 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
         const meta = await store.readRawMeta(ephemeral.projectId);
         if (!meta || meta.previewEnabled === false || meta.lifecycleState === "trashed") return notFound(res);
         return await serveProjectPath(
-          res, ephemeral.projectId, basePath, rest, { headOnly }
+          res, ephemeral.projectId, basePath, rest, {
+            headOnly, search: new URL(req.url || "/", "http://localhost").search
+          }
         );
       } catch (err) {
         console.error("Temporary preview error:", err?.message ?? err);
@@ -379,7 +386,7 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
 
     try {
       return await serveProjectPath(res, verdict.projectId, basePath, rest, {
-        headOnly
+        headOnly, search: new URL(req.url || "/", "http://localhost").search
       });
     } catch (err) {
       console.error("Share serve error:", err?.message ?? err);
@@ -449,7 +456,9 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
         return redirect(res, `/p/${id}/`);
       }
 
-      return await serveProjectPath(res, id, `/p/${id}`, rest, { headOnly });
+      return await serveProjectPath(res, id, `/p/${id}`, rest, {
+        headOnly, search: new URL(req.url || "/", "http://localhost").search
+      });
     } catch (err) {
       console.error("Preview error:", err?.message ?? err);
       return notFound(res);

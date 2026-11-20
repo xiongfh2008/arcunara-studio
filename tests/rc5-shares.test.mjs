@@ -354,7 +354,10 @@ test("Axure project share renders the nav page with share-scoped links only", as
   const homeHref = `/s/${s.token}/${encodeURIComponent("首页.html")}`;
   assert.ok(html.includes(homeHref), "page links are share-scoped (per-segment encoded)");
   assert.ok(!html.includes(`/p/${created.json.id}/`), "no open-preview URL leakage");
-  assert.ok(html.includes(`/s/${s.token}/index.html`), "raw entry link is share-scoped too");
+  assert.ok(!html.includes('id="rawEntry"'), "the broken Axure player entry is not shown");
+  const native = await server.preview(shareUrl(s.token, "/index.html?p=首页"), { redirect: "manual" });
+  assert.equal(native.status, 302);
+  assert.equal(native.headers.get("location"), `/s/${s.token}/#/s/${s.token}/${encodeURIComponent("首页.html")}`);
 
   const page = await server.preview(shareUrl(s.token, `/${encodeURIComponent("首页.html")}`));
   assert.equal(page.status, 200);

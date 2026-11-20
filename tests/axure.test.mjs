@@ -8,6 +8,8 @@ import { startServer } from "./helpers/harness.mjs";
 import { buildZip, filesZip } from "./helpers/zipbuilder.mjs";
 import {
   businessPages,
+  axurePlayerRedirect,
+  isAxurePlayerShellPath,
   inspectAxureProject,
   isAxureFileSet,
   matchNavHash,
@@ -173,8 +175,9 @@ test("Axure project root serves the platform navigation page", async () => {
   assert.ok(!html.includes("Other.html"), "resources helper excluded");
   assert.ok(!html.includes("chrome.html"), "chrome helper excluded");
 
-  // the raw entry stays reachable for debugging
-  assert.match(html, /href="\/p\/[^/]+\/index\.html"/);
+  // No broken native player link in the public safe navigation.
+  assert.ok(!html.includes('id="rawEntry"'));
+  assert.ok(!html.includes("原始入口（index.html，调试用）"));
 });
 
 test("navigation page escapes uploaded file names (XSS-safe)", async () => {
@@ -213,13 +216,50 @@ test("page URLs are per-segment encoded and resolvable", async () => {
   assert.match(await hostile.text(), /x' y & z%41/);
 });
 
-test("raw native entry (index.html) is preserved", async () => {
-  const res = await server.preview(`/p/${axureId}/index.html`);
-  assert.equal(res.status, 200);
-  assert.match(await res.text(), /Axure player shell/);
+test("Axure player shells redirect to safe navigation instead of blank native player", async () => {
+  for (const shell of ["index.html", "start.html", "start_c_1.html"]) {
+    const res = await server.preview(`/p/${axureId}/${shell}`, { redirect: "manual" });
+    assert.equal(res.status, 302, shell);
+    assert.equal(res.headers.get("location"), `/p/${axureId}/`);
+    assert.equal(res.headers.get("referrer-policy"), "no-referrer");
+  }
+});
+
+test("Axure native ?p= deep links select a listed business page only", async () => {
+  const page = "付款人名称管理（新增）";
+  const search = new URLSearchParams({ g: "1", id: "7kj6at", p: page });
+  const res = await server.preview(`/p/${axureId}/index.html?${search}`, { redirect: "manual" });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"),
+    `/p/${axureId}/#/p/${axureId}/${encodeURIComponent(page + ".html")}`);
+
+  // Never follow attacker-supplied URLs; unknown targets just show the list.
+  const bad = await server.preview(`/p/${axureId}/index.html?p=${encodeURIComponent("https://evil.example/")}`, { redirect: "manual" });
+  assert.equal(bad.status, 302);
+  assert.equal(bad.headers.get("location"), `/p/${axureId}/`);
+});
+
+test("share URLs apply the same redirect without dropping the capability", async () => {
+  const created = await server.api(`/api/projects/${axureId}/shares`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ expiresInHours: 1 })
+  });
+  assert.equal(created.status, 201);
+  const token = created.json.token;
+  const url = `/s/${token}/index.html?p=${encodeURIComponent("POBO手续费管理（新增）")}`;
+  const res = await server.preview(url, { redirect: "manual" });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"),
+    `/s/${token}/#/s/${token}/${encodeURIComponent("POBO手续费管理（新增）.html")}`);
+  const redirected = await server.preview(res.headers.get("location").split("#")[0]);
+  assert.equal(redirected.status, 200);
+  assert.match(await redirected.text(), /安全预览 · 页面目录/);
 });
 
 test("non-Axure projects keep the RC2 preview entry and CSP", async () => {
+  const raw = await server.preview(`/p/${plainId}/index.html`);
+  assert.equal(raw.status, 200);
+  assert.match(await raw.text(), /plain prototype/);
   const res = await server.preview(`/p/${plainId}/`);
 
   assert.equal(res.status, 200);
@@ -260,6 +300,22 @@ test("Axure navigation page uses its own sandboxed CSP", async () => {
   assert.ok(!csp.includes("allow-same-origin"));
   assert.ok(!csp.includes("unsafe-eval"));
   assert.ok(!/connect-src \*/.test(csp));
+});
+
+test("player-shell matching and target allowlist are strict", () => {
+  assert.equal(isAxurePlayerShellPath("/index.html"), true);
+  assert.equal(isAxurePlayerShellPath("/start_with_pages.html"), true);
+  assert.equal(isAxurePlayerShellPath("/resources/index.html"), false);
+  assert.equal(isAxurePlayerShellPath("/business.html"), false);
+  assert.equal(isAxurePlayerShellPath("/index.html/evil"), false);
+  const base = "/s/capability";
+  const pages = ["付款（优化）.html", "x%41.html"];
+  assert.equal(axurePlayerRedirect(base, pages, "?p=付款（优化）"),
+    `${base}/#${base}/${encodeURIComponent("付款（优化）.html")}`);
+  assert.equal(axurePlayerRedirect(base, pages, "?p=x%2541.html"),
+    `${base}/#${base}/${encodeURIComponent("x%41.html")}`);
+  assert.equal(axurePlayerRedirect(base, pages, "?p=..%2Fmeta.json"), `${base}/`);
+  assert.equal(axurePlayerRedirect(base, pages, "?p=https%3A%2F%2Fevil.example"), `${base}/`);
 });
 
 // --- deep-link matching (the exact function embedded in the nav page) ------
