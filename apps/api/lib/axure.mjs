@@ -222,7 +222,7 @@ export function renderNavPage(base, pages, { nativeOrigin = null } = {}) {
   <span class="tag" id="count"></span>
   <span class="spacer"></span>
   <a id="openStandalone" href="#" target="_blank" rel="noopener noreferrer">独立页面</a>
-  ${nativeHref ? `<a id="nativeAxurePlayer" href="${nativeHref}" target="_blank" rel="noopener noreferrer">Axure 原生播放器（独立隔离）</a>` : ""}
+  ${nativeHref ? `<a id="nativeAxurePlayer" href="${nativeHref}" target="_self" rel="noreferrer">Axure 原生播放器（独立隔离）</a>` : ""}
 </header>
 <main>
   <nav aria-label="业务页面目录">
