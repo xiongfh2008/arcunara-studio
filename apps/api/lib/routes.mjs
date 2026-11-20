@@ -121,6 +121,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       .replace("__ARCU_ACCESS_MODE_VALUE__", String(cloudflareAccess.enabled))
       .replace("__ARCU_MEMBER_LOGIN_MODE_VALUE__", String(passwords.enabled))
       .replace("__ARCU_PUBLIC_PREVIEW_MODE_VALUE__", String(config.stagingPublicPreview === true))
+      .replace("__ARCU_AXURE_NATIVE_ORIGIN_VALUE__", JSON.stringify(config.axureNativeOrigin || null))
       .replace("__ARCU_SITE_DOMAIN_VALUE__", JSON.stringify(config.siteHostingEnabled ? config.siteDomain : null));
 
     const localCookie = localSession.issueCookie(req);
