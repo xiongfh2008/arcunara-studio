@@ -30,6 +30,19 @@
 
 把中间模型中的页面、文字、输入、图像和导航按 Zee-RP 的实际 schema 转成 RP/1，再调用可信编译器，并在真实 Axure RP11 中打开/选中/编辑完成验证。Zee-RP 位于用户 Windows 本地 D:\AI\zee-rp，当前 GitHub 仓库没有其源码或可调用二进制。无法在没有编译器的情况下真实验证 .rp，不做虚假输出。
 
+## RC18B — Zee-RP RP/1 源码桥接（已开发）
+
+基于公开 [LilZeeCN/zee-rp](https://github.com/LilZeeCN/zee-rp) 的 `references/rp-language.md` 与 `scripts/proto.mjs` CLI 契约实现。公开 RP/1 JSON 规范的当前目标为 `target: 9`（Axure RP9 原生后端），**不是已验证的 RP11 原生编译**。
+
+- `GET /api/projects/{uuid}/axure-rp1?version=N`：管理员只读获取 `{spec, report}`，不传 N 默认当前版本；部署密钥 403，回收站 409。源文件不修改当前版本、原型和分享。
+- 将 RC18A 候选中间模型转换为 `language: "rp/1", target: 9` JSON：页面、标签/段落、按钮、输入框、复选/单选、已知图片路径、同项目页面跳转（`on.click: [{type:"link",page:"..."}]`）。
+- 仅按明确内联坐标与尺寸映射，未指明的布局采用稳定的简易候选位置，必须在设计工具里校准。CSS、JS、表单状态、复杂交互不可保真，输出 `report.warnings`。
+- 无图片文件或跨域链接等不可靠项降级，绝不把被跳过或降级的功能谎称已转换。
+- 工作台“Axure 转换评估”弹框新增“下载 Zee-RP RP/1 源文件”，文件后缀 `.rp1.json`，**不是** `.rp`。
+- 提供离线 `packages/rp-converter/local-cli.mjs`：本机 opt-in 的 RP/1 生成 / Zee-RP check 与 generate 编译包装器。平台 API / Preview 不执行第三方编译器。
+
+具体 Windows 本地运行命令、资源保留方式及宿主验收要求请查看 `docs/ZEE_RP_BRIDGE.md`。
+
 ## 原生导出器后续接入要求
 
 1. 定义可版本化的页面/元件/交互中间模型（节点 ID、几何、文本、样式、图片资源、事件条件）。

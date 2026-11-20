@@ -86,6 +86,7 @@ npm start
 | `POST /api/projects` | 创建项目（JSON 或 multipart） | 201 `{id,name,createdAt,updatedAt,currentVersion,fileCount,totalSize,entryPoint,previewPath,versionCount,description?}` | 401 / 415 / 400 / 413 / 500 |
 | `GET /api/projects/{id}` | 项目详情 | 200 详情视图 | 404 `PROJECT_NOT_FOUND` |
 | `POST /api/projects/{id}/versions` | 上传新版本（multipart 文件或 JSON `{html}`） | 201 `{projectId,version,createdAt,fileCount,totalSize,entryPoint,previewPath,currentVersion}` | 404 / 400 / 413 / 415 |
+| `GET /api/projects/{id}/axure-rp1?version=N` | RC18B：Zee-RP `rp/1` target=9 结构化源 JSON + 降级报告（不是 .rp） | 200 `{spec,report}` | 400/401/403/404/409/413 |
 | `GET /api/projects/{id}/axure-ir?version=N` | RC18A 静态可编辑控件候选映射 JSON（非原生 .rp） | 200 `{schema,version,pages,warnings,nativeRpExportReady:false}` | 400/401/403/404/409/413 |
 | `GET /api/projects/{id}/versions` | 版本历史（升序 + isCurrent） | 200 `{projectId,versions:[...]}` | 404 |
 | `GET /api/projects/{id}/export?version=N` | RC17 管理员导出当前版本（省略 N）或指定历史版本为 ZIP；流式生成，不影响当前版本 | 200 application/zip 附件 | 400 `INVALID_VERSION` / 404 `VERSION_NOT_FOUND` / 409 `PROJECT_TRASHED` / 413 `EXPORT_SIZE_LIMIT` |
