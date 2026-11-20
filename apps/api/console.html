@@ -469,6 +469,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .member-mode .detail-tabs [data-tab="deploy"],
 .member-mode .detail-tabs [data-tab="overview"],
 .member-mode .detail-tabs [data-tab="members"],
+.viewer-mode #publishHtmlEditorBtn,
 .viewer-mode #openUploadDialog,
 .viewer-mode #openUploadDialogDetail,
 .viewer-mode #versionNoteEditorRow,
@@ -488,6 +489,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 #memberAuthStatus{margin-top:10px;color:#56658e}
 #memberAccountDialog .create-dialog-content{max-height:74vh;overflow:auto}
 #memberAccountDialog input{width:100%}
+
+/* RC21A single-file HTML source editor; browser never executes draft JS. */
+.rc21-editor-dialog{width:min(1250px,96vw);max-width:96vw}
+.rc21-editor-dialog .create-dialog-content{max-height:calc(90vh - 80px);overflow:auto}
+.rc21-editor-toolbar{justify-content:flex-end;margin-bottom:10px}
+.rc21-editor-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:13px}
+.rc21-editor-grid label.field{min-width:0;margin:0}
+#htmlEditorSource{width:100%;height:min(53vh,540px);min-height:320px;resize:vertical;font:12px/1.6 ui-monospace,Consolas,monospace;tab-size:2;white-space:pre;overflow:auto}
+.rc21-editor-preview{min-width:0;display:flex;flex-direction:column;gap:8px}
+#htmlEditorPreview{height:min(53vh,540px);min-height:320px;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px}
+#htmlEditorStatus:not(:empty){padding:9px 0}
+@media(max-width:760px){.rc21-editor-grid{grid-template-columns:1fr}#htmlEditorSource,#htmlEditorPreview{height:340px;min-height:280px}}
 </style>
 </head>
 <body>
@@ -606,6 +619,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
             <div class="detail-actions">
               <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
               <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
+              <button type="button" id="openHtmlEditorBtn" class="ghost">在线编辑 HTML</button>
               <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
               <button type="button" id="analyzeAxureBtn" class="ghost">Axure 转换评估</button>
             </div>
@@ -861,6 +875,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       </details>
 </div>
 </div>
+</dialog>
+<dialog class="create-dialog rc21-editor-dialog" id="htmlEditorDialog" aria-labelledby="htmlEditorHeading">
+  <div class="create-dialog-header"><h2 id="htmlEditorHeading">在线编辑 HTML 原型</h2><button type="button" id="closeHtmlEditorBtn" class="ghost">关闭</button></div>
+  <div class="create-dialog-content">
+    <p class="hint" id="htmlEditorInfo">仅支持单文件 HTML，保存会创建新版本，不覆盖旧版。多文件项目请继续使用 ZIP 更新。</p>
+    <div class="row rc21-editor-toolbar">
+      <span id="htmlEditorVersion" class="hint"></span>
+      <span id="htmlEditorByteCount" class="hint" aria-live="polite"></span>
+      <button type="button" class="ghost" id="htmlEditorPreviewBtn">刷新安全预览</button>
+    </div>
+    <div class="rc21-editor-grid">
+      <label class="field"><span>HTML 源代码（最多 180000 UTF-8 字节）</span><textarea id="htmlEditorSource" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="HTML 源代码"></textarea></label>
+      <section class="rc21-editor-preview" aria-label="不执行脚本的安全草稿预览">
+        <div class="hint">草稿预览 · 禁止执行 JS、表单和网络请求，图片建议使用内联 data: URI</div>
+        <iframe id="htmlEditorPreview" title="静态 HTML 草稿预览" sandbox="" referrerpolicy="no-referrer"></iframe>
+      </section>
+    </div>
+    <p id="htmlEditorStatus" role="status" aria-live="polite" class="hint"></p>
+    <div class="upload-footer">
+      <button type="button" id="cancelHtmlEditorBtn" class="ghost">取消</button>
+      <button type="button" id="publishHtmlEditorBtn">保存为新版本</button>
+    </div>
+  </div>
 </dialog>
 <dialog class="create-dialog version-modal" id="versionUploadDialog" aria-labelledby="versionUploadHeading">
   <div class="create-dialog-header">
@@ -2997,6 +3034,116 @@ $("downloadRp1SourceBtn").addEventListener("click", async () => {
   } finally {
     setBusy(btn, false);
   }
+});
+
+
+// RC21A editor — HTML stays in the isolated <textarea> and script-disabled
+// <iframe sandbox="">. Publishing is compare-and-swap against source SHA-256,
+// so a concurrent AI deploy cannot silently replace edits.
+let htmlEditorBase=null;
+function htmlEditorBytes(value) {
+  return new TextEncoder().encode(value).byteLength;
+}
+function htmlEditorSetCount() {
+  const bytes=htmlEditorBytes($("htmlEditorSource").value);
+  $("htmlEditorByteCount").textContent=bytes.toLocaleString()+" / 180,000 bytes";
+  $("htmlEditorByteCount").style.color=bytes>180000?"var(--err)":"var(--muted)";
+}
+function htmlEditorStaticPreview() {
+  const policy="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'\">";
+  const html=$("htmlEditorSource").value;
+  $("htmlEditorPreview").srcdoc="<!doctype html><head>"+policy+"</head>"+html;
+}
+function closeHtmlEditor(force=false) {
+  if(!force && htmlEditorBase &&
+      $("htmlEditorSource").value!==htmlEditorBase.html &&
+      !window.confirm("存在未保存的 HTML 修改，确定关闭并放弃草稿？")) return false;
+  $("htmlEditorDialog").close();
+  return true;
+}
+function clearHtmlEditor() {
+  $("htmlEditorPreview").srcdoc="";
+  $("htmlEditorSource").value="";
+  $("htmlEditorStatus").textContent="";
+  htmlEditorBase=null;
+}
+$("openHtmlEditorBtn").addEventListener("click",async()=>{
+  if(!selected) {feedback("请先选择项目",false);return;}
+  const projectId=selected.id;
+  const btn=$("openHtmlEditorBtn");
+  setBusy(btn,true,"读取 HTML…");
+  try{
+    const source=await api("/api/projects/"+projectId+"/html-editor");
+    if(!selected || selected.id!==projectId)return;
+    htmlEditorBase=source;
+    $("htmlEditorSource").value=source.html;
+    $("htmlEditorSource").readOnly=
+      sessionPrincipal.type==="member" && selected.role!=="editor";
+    $("publishHtmlEditorBtn").disabled=$("htmlEditorSource").readOnly;
+    $("htmlEditorVersion").textContent="源版本 v"+source.version+" · "+source.entryPoint;
+    $("htmlEditorStatus").textContent=$("htmlEditorSource").readOnly
+      ? "只读成员可查看源代码；请联系项目管理员或编辑成员更新。"
+      : "编辑后保存为新版本；已有版本保留，可以在版本记录中回滚。";
+    htmlEditorSetCount();
+    htmlEditorStaticPreview();
+    $("htmlEditorDialog").showModal();
+  }catch(err) {
+    const code=err?.json?.code;
+    feedback(code==="EDITOR_MULTIFILE_UNSUPPORTED"
+      ?"此项目包含多个文件，请使用 ZIP 上传更新，以免丢失图片/CSS/JS。"
+      :"打开 HTML 编辑器失败："+friendlyError(err),false);
+  }finally{setBusy(btn,false);}
+});
+$("htmlEditorSource").addEventListener("input",()=>{
+  htmlEditorSetCount();
+  $("htmlEditorStatus").textContent="草稿已修改；点击“刷新安全预览”查看静态效果。";
+});
+$("htmlEditorPreviewBtn").addEventListener("click",()=>{
+  if(!htmlEditorBase)return;
+  htmlEditorStaticPreview();
+  $("htmlEditorStatus").textContent="已刷新静态草稿预览（JS、外部资源和表单均被阻止）。";
+});
+$("closeHtmlEditorBtn").addEventListener("click",()=>closeHtmlEditor());
+$("cancelHtmlEditorBtn").addEventListener("click",()=>closeHtmlEditor());
+$("htmlEditorDialog").addEventListener("cancel",event=>{
+  if(htmlEditorBase && $("htmlEditorSource").value!==htmlEditorBase.html &&
+     !window.confirm("草稿尚未保存，确定关闭？"))event.preventDefault();
+});
+$("htmlEditorDialog").addEventListener("close",clearHtmlEditor);
+$("publishHtmlEditorBtn").addEventListener("click",async()=>{
+  if(!htmlEditorBase || !selected || selected.id!==htmlEditorBase.projectId)return;
+  if(sessionPrincipal.type==="member"&&selected.role!=="editor"){
+    feedback("当前项目为只读权限",false);return;
+  }
+  const html=$("htmlEditorSource").value;
+  if(htmlEditorBytes(html)>180000 || !html.toLowerCase().includes("<html")){
+    $("htmlEditorStatus").textContent="保存失败：需要有效 HTML，且最多 180000 UTF-8 字节。";
+    return;
+  }
+  const btn=$("publishHtmlEditorBtn");
+  setBusy(btn,true,"正在安全保存…");
+  try{
+    const result=await api("/api/projects/"+htmlEditorBase.projectId+"/html-editor/publish",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({baseVersion:htmlEditorBase.version,
+        baseSha256:htmlEditorBase.sha256,html})
+    });
+    const id=htmlEditorBase.projectId;
+    closeHtmlEditor(true);
+    if(result.unchanged){
+      feedback("没有内容变化，未创建重复版本。",true);
+      return;
+    }
+    await selectProject(id);
+    await loadProjects();
+    feedback("HTML 已保存为 v"+result.version+"；原有版本未覆盖。",true);
+  }catch(err){
+    if(err?.json?.code==="EDITOR_VERSION_CONFLICT"){
+      $("htmlEditorStatus").textContent="保存冲突：项目已被其他更新覆盖。草稿仍在，请先复制保存草稿，然后重新读取最新版本。";
+    }else{
+      $("htmlEditorStatus").textContent="保存失败："+friendlyError(err);
+    }
+  }finally{setBusy(btn,false);}
 });
 
 </script>

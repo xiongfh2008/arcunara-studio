@@ -393,7 +393,7 @@ export function createStore(config) {
   // uploads of identical content collapse into one version safely. Re-adding
   // content that matches a NON-current historical version still creates a
   // new version (rolling back + re-deploying must move currentVersion).
-  async function addVersion(id, { stagedDir, stats, contentHash }) {
+  async function addVersion(id, { stagedDir, stats, contentHash, expectedCurrentVersion, expectedSourceSha256 }) {
     return withLock(id, async () => {
       const meta = await readRawMeta(id);
       if (meta?.lifecycleState === "trashed") {
@@ -402,6 +402,34 @@ export function createStore(config) {
 
       if (!meta) {
         throw new ApiError(404, "Not Found", "PROJECT_NOT_FOUND");
+      }
+
+      // RC21A compare-and-swap is checked INSIDE this project write lock.
+      // A concurrent upload, editor save or rollback cannot silently replace
+      // the snapshot the editor originally loaded.
+      if (expectedCurrentVersion !== undefined) {
+        if (!Number.isSafeInteger(expectedCurrentVersion) ||
+            expectedCurrentVersion < 1 ||
+            !CONTENT_HASH_RE.test(expectedSourceSha256 || "")) {
+          throw new ApiError(400,"Invalid editor revision","EDITOR_BASE_INVALID");
+        }
+        const current=await currentVersionEntry(id,meta);
+        if (current.version !== expectedCurrentVersion) {
+          throw new ApiError(409,"Project version changed","EDITOR_VERSION_CONFLICT");
+        }
+        if (current.fileCount !== 1 ||
+            typeof current.entryPoint !== "string" ||
+            current.entryPoint.split("/").some(x=>!x || x==="." || x===".." ||
+              x.startsWith(".") || x.includes("\\") || x.includes(":"))) {
+          throw new ApiError(409,"Not a single-file HTML project","EDITOR_MULTIFILE_UNSUPPORTED");
+        }
+        const source=path.join(versionSourceDir(id,current),
+          ...current.entryPoint.split("/"));
+        const currentHtml=await fs.readFile(source);
+        const actual=crypto.createHash("sha256").update(currentHtml).digest("hex");
+        if (actual !== expectedSourceSha256) {
+          throw new ApiError(409,"HTML changed since editor load","EDITOR_VERSION_CONFLICT");
+        }
       }
 
       if (contentHash !== undefined && !CONTENT_HASH_RE.test(contentHash)) {

@@ -18,6 +18,7 @@ import { convertIRToRP1 } from "../../../packages/rp-converter/rp1-bridge.mjs";
 import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { compareProjectVersions } from "./version-diff.mjs";
 import { exportProjectVersionZip } from "./zip-export.mjs";
+import { readEditableHtml, publishEditedHtml } from "./html-editor.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
@@ -31,6 +32,8 @@ const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readin
 const AXURE_IR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-ir$`);
 const AXURE_RP1_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-rp1$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
+const HTML_EDITOR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/html-editor$`);
+const HTML_EDITOR_PUBLISH_RE = new RegExp(`^/api/projects/${PROJECT_ID}/html-editor/publish$`);
 const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions$`);
 const VERSION_EXPORT_RE = new RegExp(`^/api/projects/${PROJECT_ID}/export$`);
 const VERSION_NOTE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions/([0-9]+)$`);
@@ -125,6 +128,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         "default-src 'none'; " +
         "script-src 'unsafe-inline'; " +
         "style-src 'unsafe-inline'; " +
+        "frame-src 'self' blob:; " +
         "connect-src 'self'; " +
         "form-action 'none'; " +
         "frame-ancestors 'none'; " +
@@ -354,6 +358,18 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
 
       if (req.method === "POST" && pathname === "/api/projects") {
         return await handleCreateProject(req, res, { config, store });
+      }
+
+      // RC21A — single-file HTML editor with current-version CAS.
+      const editorMatch=HTML_EDITOR_RE.exec(pathname);
+      if (editorMatch && req.method==="GET") {
+        return sendJson(res,200,await readEditableHtml(store,editorMatch[1]));
+      }
+      const editorSave=HTML_EDITOR_PUBLISH_RE.exec(pathname);
+      if (editorSave && req.method==="POST") {
+        const payload=await readJsonPayload(req,config.limits);
+        const result=await publishEditedHtml(store,editorSave[1],payload);
+        return sendJson(res,result.unchanged?200:201,result);
       }
 
       const versionsMatch = VERSIONS_RE.exec(pathname);
