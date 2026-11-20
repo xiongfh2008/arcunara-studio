@@ -80,7 +80,7 @@ function encodePreviewPath(base, page) {
  */
 export function isAxurePlayerShellPath(rest) {
   return typeof rest === "string" &&
-    /^\\/[^/]+$/.test(rest) &&
+    /^\/[^/]+$/.test(rest) &&
     AXURE_PLAYER_PAGES.has(rest.slice(1).toLowerCase());
 }
 
@@ -93,7 +93,7 @@ export function axurePlayerRedirect(base, pages, search = "") {
   const requested = new URLSearchParams(search).get("p");
   const matchingPage = typeof requested === "string" && requested.length <= 256
     ? pages.find((page) =>
-        page === requested || page.replace(/\\.html?$/i, "") === requested
+        page === requested || page.replace(/\.html?$/i, "") === requested
       )
     : null;
   return matchingPage
