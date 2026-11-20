@@ -469,6 +469,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .member-mode .detail-tabs [data-tab="deploy"],
 .member-mode .detail-tabs [data-tab="overview"],
 .member-mode .detail-tabs [data-tab="members"],
+.viewer-mode #publishHtmlEditorBtn,
 .viewer-mode #openUploadDialog,
 .viewer-mode #openUploadDialogDetail,
 .viewer-mode #versionNoteEditorRow,
@@ -488,6 +489,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 #memberAuthStatus{margin-top:10px;color:#56658e}
 #memberAccountDialog .create-dialog-content{max-height:74vh;overflow:auto}
 #memberAccountDialog input{width:100%}
+
+/* RC21A single-file HTML source editor; browser never executes draft JS. */
+.rc21-editor-dialog{width:min(1250px,96vw);max-width:96vw}
+.rc21-editor-dialog .create-dialog-content{max-height:calc(90vh - 80px);overflow:auto}
+.rc21-editor-toolbar{justify-content:flex-end;margin-bottom:10px}
+.rc21-editor-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:13px}
+.rc21-editor-grid label.field{min-width:0;margin:0}
+#htmlEditorSource{width:100%;height:min(53vh,540px);min-height:320px;resize:vertical;font:12px/1.6 ui-monospace,Consolas,monospace;tab-size:2;white-space:pre;overflow:auto}
+.rc21-editor-preview{min-width:0;display:flex;flex-direction:column;gap:8px}
+#htmlEditorPreview{height:min(53vh,540px);min-height:320px;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px}
+#htmlEditorStatus:not(:empty){padding:9px 0}
+@media(max-width:760px){.rc21-editor-grid{grid-template-columns:1fr}#htmlEditorSource,#htmlEditorPreview{height:340px;min-height:280px}}
 </style>
 </head>
 <body>
@@ -606,6 +619,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
             <div class="detail-actions">
               <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
               <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
+              <button type="button" id="openHtmlEditorBtn" class="ghost">在线编辑 HTML</button>
               <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
               <button type="button" id="analyzeAxureBtn" class="ghost">Axure 转换评估</button>
             </div>
@@ -861,6 +875,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       </details>
 </div>
 </div>
+</dialog>
+<dialog class="create-dialog rc21-editor-dialog" id="htmlEditorDialog" aria-labelledby="htmlEditorHeading">
+  <div class="create-dialog-header"><h2 id="htmlEditorHeading">在线编辑 HTML 原型</h2><button type="button" id="closeHtmlEditorBtn" class="ghost">关闭</button></div>
+  <div class="create-dialog-content">
+    <p class="hint" id="htmlEditorInfo">仅支持单文件 HTML，保存会创建新版本，不覆盖旧版。多文件项目请继续使用 ZIP 更新。</p>
+    <div class="row rc21-editor-toolbar">
+      <span id="htmlEditorVersion" class="hint"></span>
+      <span id="htmlEditorByteCount" class="hint" aria-live="polite"></span>
+      <button type="button" class="ghost" id="htmlEditorPreviewBtn">刷新安全预览</button>
+    </div>
+    <div class="rc21-editor-grid">
+      <label class="field"><span>HTML 源代码（最多 180000 UTF-8 字节）</span><textarea id="htmlEditorSource" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="HTML 源代码"></textarea></label>
+      <section class="rc21-editor-preview" aria-label="不执行脚本的安全草稿预览">
+        <div class="hint">草稿预览 · 禁止执行 JS、表单和网络请求，图片建议使用内联 data: URI</div>
+        <iframe id="htmlEditorPreview" title="静态 HTML 草稿预览" sandbox="" referrerpolicy="no-referrer"></iframe>
+      </section>
+    </div>
+    <p id="htmlEditorStatus" role="status" aria-live="polite" class="hint"></p>
+    <div class="upload-footer">
+      <button type="button" id="cancelHtmlEditorBtn" class="ghost">取消</button>
+      <button type="button" id="publishHtmlEditorBtn">保存为新版本</button>
+    </div>
+  </div>
 </dialog>
 <dialog class="create-dialog version-modal" id="versionUploadDialog" aria-labelledby="versionUploadHeading">
   <div class="create-dialog-header">
