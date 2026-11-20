@@ -373,8 +373,8 @@ button.small-link:hover{background:transparent;color:#153fa9;text-decoration:und
   <div class="create-dialog-content"><p id="axureReadinessSummary" class="hint"></p>
     <p class="hint">评估结果仅用于识别页面、控件和交互风险；并非原生 Axure .rp 文件。可编辑 .rp 导出仍需原生编译器验证。</p>
     <pre id="axureReadinessJson" style="white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;background:var(--panel2);padding:14px;border:1px solid var(--border);border-radius:10px;font-size:12px"></pre>
-    <div class="row"><button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button><button type="button" id="downloadAxureIrBtn" class="ghost">下载可编辑控件映射 JSON</button></div>
-    <p class="hint">静态控件映射 JSON 不等于 .rp；其中的交互与布局仍需 Zee-RP 编译并在 Axure RP11 中验收。</p>
+    <div class="row"><button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button><button type="button" id="downloadAxureIrBtn" class="ghost">下载可编辑控件映射 JSON</button><button type="button" id="downloadRp1SourceBtn" class="ghost">下载 Zee-RP RP/1 源文件</button></div>
+    <p class="hint">RP/1 源文件可交给已安装的 Zee-RP 编译器处理，但它当前以 Axure RP9 为编译目标；JSON 源文件不是 .rp，尚未通过 Axure RP11 宿主验收。</p>
   </div>
 </dialog>
 <dialog class="create-dialog manage-dialog" id="manageDialog" aria-labelledby="manageDialogHeading">
@@ -2003,6 +2003,47 @@ $("downloadAxureIrBtn").addEventListener("click", async () => {
       ir.summary.editableCandidates + " 个静态控件候选（JSON，非 .rp）", true);
   } catch (err) {
     feedback("控件映射失败：" + friendlyError(err), false);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+
+
+$("downloadRp1SourceBtn").addEventListener("click", async () => {
+  if (!selected) return;
+  const id = selected.id;
+  const version = selectedVersion || selected.currentVersion;
+  const btn = $("downloadRp1SourceBtn");
+  if (btn.disabled) return;
+  setBusy(btn, true, "生成 RP/1 源码…");
+  try {
+    const result = await api("/api/projects/" + id + "/axure-rp1?version=" + version);
+    if (result?.report?.status !== "source-only" ||
+        result?.report?.hostValidated !== false ||
+        result?.spec?.language !== "rp/1" || result?.spec?.target !== 9) {
+      throw new Error("输出格式与版本未经确认，拒绝下载");
+    }
+    const blob = new Blob([JSON.stringify(result.spec, null, 2)], {
+      type: "application/json;charset=utf-8"
+    });
+    const uri = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = uri;
+      link.download = "arcunara-" + id + "-v" + version + ".rp1.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(uri), 1500);
+    }
+    $("axureReadinessSummary").textContent =
+      "RP/1 源码已下载：映射 " + result.report.mapped +
+      " 个静态控件，降级 " + result.report.downgraded +
+      " 个。请同时下载 HTML/ZIP 以保留本地图片素材。此文件不是 .rp，未通过 RP11 验收。";
+    feedback("Zee-RP RP/1 源文件已导出（非 .rp）", true);
+  } catch (err) {
+    feedback("RP/1 导出失败：" + friendlyError(err), false);
   } finally {
     setBusy(btn, false);
   }
