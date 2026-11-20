@@ -339,11 +339,21 @@ export function createPreviewHandler({ store, config = {}, previewTickets = null
         if (rest !== "/") {
           return redirect(res, axurePlayerRedirect(basePath, axure.pages, search));
         }
-        const html = renderNavPage(basePath, axure.pages, {
-          nativeOrigin: basePath.startsWith("/s/") ? config.axureNativeOrigin : null
-        });
+        const nativeOrigin = basePath.startsWith("/s/") ? config.axureNativeOrigin : null;
+        const html = renderNavPage(basePath, axure.pages, { nativeOrigin });
+        // Only this trusted, server-generated navigation may open a native
+        // player in a new tab. Without these flags CSP sandbox prevents the
+        // link from opening, or propagates opaque-origin restrictions to it.
+        const navHeaders = nativeOrigin
+          ? {
+              ...NAV_HEADERS,
+              "Content-Security-Policy": NAV_HEADERS["Content-Security-Policy"]
+                .replace("sandbox allow-scripts;",
+                  "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox;")
+            }
+          : NAV_HEADERS;
         res.writeHead(200, {
-          ...NAV_HEADERS,
+          ...navHeaders,
           "Content-Length": Buffer.byteLength(html)
         });
         if (headOnly) {
