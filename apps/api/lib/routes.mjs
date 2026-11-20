@@ -19,6 +19,8 @@ import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { compareProjectVersions } from "./version-diff.mjs";
 import { exportProjectVersionZip } from "./zip-export.mjs";
 import { readEditableHtml, publishEditedHtml } from "./html-editor.mjs";
+import { listSourceFiles, readSourceFile, publishSourceChanges } from "./project-files.mjs";
+import { createAiGenerator } from "./ai-generator.mjs";
 import { parseDeployToken } from "./auth.mjs";
 import { createLocalSession } from "./local-session.mjs";
 import { createCloudflareAccessAuth } from "./cloudflare-access.mjs";
@@ -33,6 +35,9 @@ const AXURE_IR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-ir$`);
 const AXURE_RP1_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-rp1$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const HTML_EDITOR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/html-editor$`);
+const SOURCE_FILES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/source/files$`);
+const SOURCE_FILE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/source/file$`);
+const SOURCE_PUBLISH_RE = new RegExp(`^/api/projects/${PROJECT_ID}/source/publish$`);
 const HTML_EDITOR_PUBLISH_RE = new RegExp(`^/api/projects/${PROJECT_ID}/html-editor/publish$`);
 const VERSION_COMPARE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/compare-versions$`);
 const VERSION_EXPORT_RE = new RegExp(`^/api/projects/${PROJECT_ID}/export$`);
@@ -82,6 +87,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
   const cloudflareAccess = createCloudflareAccessAuth(config);
   const team = createTeamAccess(config, store);
   const passwords=createMemberPasswords(config,store);
+  const ai=createAiGenerator(config);
   // The internal workbench is static, contains no credentials and remains
   // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
@@ -342,6 +348,15 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         return sendJson(res,200,await team.removeMember(memberMatch[1],memberMatch[2]));
       }
 
+      // Opt-in paid model calls are restricted to the existing global
+      // administrator identity; member tokens and deploy keys are excluded.
+      if (req.method==="GET" && pathname==="/api/ai/status")
+        return sendJson(res,200,ai.status());
+      if (req.method==="POST" && pathname==="/api/ai/generate"){
+        const payload=await readJsonPayload(req,config.limits);
+        return sendJson(res,200,await ai.generate(payload));
+      }
+
       if (req.method === "GET" && pathname === "/api/limits") {
         // Active upload quotas for the workbench's quota-aware error hints.
         // Values are configuration, not secrets; auth required to avoid
@@ -358,6 +373,25 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
 
       if (req.method === "POST" && pathname === "/api/projects") {
         return await handleCreateProject(req, res, { config, store });
+      }
+
+      // RC21B: multi-file source editor. Ordinary account and project RBAC
+      // runs BEFORE this route; deploy keys have no access.
+      const sourceList=SOURCE_FILES_RE.exec(pathname);
+      if(sourceList && req.method==="GET")
+        return sendJson(res,200,await listSourceFiles(store,sourceList[1]));
+      const sourceFile=SOURCE_FILE_RE.exec(pathname);
+      if(sourceFile && req.method==="GET"){
+        const params=new URL(req.url||"/","http://localhost").searchParams;
+        if(params.getAll("path").length!==1)
+          throw new ApiError(400,"Exactly one source path required","EDITOR_PATH_INVALID");
+        return sendJson(res,200,await readSourceFile(store,sourceFile[1],params.get("path")));
+      }
+      const sourcePublish=SOURCE_PUBLISH_RE.exec(pathname);
+      if(sourcePublish && req.method==="POST"){
+        const data=await readJsonPayload(req,config.limits);
+        const result=await publishSourceChanges(store,sourcePublish[1],data);
+        return sendJson(res,result.unchanged?200:201,result);
       }
 
       // RC21A — single-file HTML editor with current-version CAS.

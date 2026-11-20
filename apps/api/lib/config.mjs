@@ -189,6 +189,21 @@ export function loadConfig(env = process.env) {
     throw new Error("Member login requires team access, loopback API host and no local auto-admin session");
   }
 
+  // RC21C: AI draft generation is opt-in, administrator-only and uses a
+  // provider key file mounted at runtime (never injected into console HTML).
+  const aiFlag=env.ARCU_AI_ENABLED||"0";
+  if(!["0","1"].includes(aiFlag))
+    throw new Error("ARCU_AI_ENABLED must be 0 or 1");
+  const aiGenerationEnabled=aiFlag==="1";
+  const aiApiKeyFile=(env.ARCU_AI_API_KEY_FILE||"").trim();
+  if(aiGenerationEnabled && aiApiKeyFile===tokenFile) {
+    throw new Error("AI provider key must be separate from API administrator token");
+  }
+  if(aiGenerationEnabled && (!aiApiKeyFile.startsWith("/") ||
+      aiApiKeyFile.includes("\0"))) {
+    throw new Error("AI generation needs absolute ARCU_AI_API_KEY_FILE");
+  }
+
   // RC13: independent public static-site listener. Explicitly opt in and
   // route each project through a distinct UUID subdomain. Never reuse the
   // platform/admin/preview hostname, even though sites are public content.
@@ -239,6 +254,8 @@ export function loadConfig(env = process.env) {
     teamAccessEnabled,
     memberLoginEnabled,
     memberPublicOrigin,
+    aiGenerationEnabled,
+    aiApiKeyFile,
     stagingPublicPreview,
     siteHostingEnabled,
     siteDomain: siteHostingEnabled ? siteDomain : null,

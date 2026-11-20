@@ -110,7 +110,16 @@ export function createSiteHandler({ store, config }) {
     try {
       const meta = await store.readRawMeta(id);
       if (!meta || meta.siteEnabled !== true || meta.lifecycleState === "trashed") return notFound(res);
-      const entry = await store.currentVersionEntry(id,meta);
+      // Published website is pinned to an explicitly approved version.
+      // Older sites without siteVersion keep their legacy current-version
+      // behavior until the first new draft, when store.addVersion freezes it.
+      const current = await store.currentVersionEntry(id,meta);
+      const entry = Number.isSafeInteger(meta.siteVersion)
+        ? (Array.isArray(meta.versions)
+            ? meta.versions.find(v=>v.version===meta.siteVersion)
+            : meta.siteVersion===1?current:null)
+        : current;
+      if(!entry)return notFound(res);
       const root = store.versionSourceDir(id,entry);
       const isDirectoryRequest = rawPath.endsWith("/");
       const direct = segments.length === 0

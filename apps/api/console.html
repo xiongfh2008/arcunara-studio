@@ -501,6 +501,29 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 #htmlEditorPreview{height:min(53vh,540px);min-height:320px;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px}
 #htmlEditorStatus:not(:empty){padding:9px 0}
 @media(max-width:760px){.rc21-editor-grid{grid-template-columns:1fr}#htmlEditorSource,#htmlEditorPreview{height:340px;min-height:280px}}
+
+/* RC21B/C source trees, text diff, isolated preview and AI draft workflow */
+.rc21-files-dialog{width:min(1310px,97vw);max-width:97vw}
+.rc21-files-dialog .create-dialog-content,.rc21-ai-dialog .create-dialog-content{max-height:78vh;overflow-y:auto}
+.rc21-files-layout{display:grid;grid-template-columns:minmax(180px,260px) minmax(0,1fr);gap:14px;min-height:410px}
+.rc21-file-actions{margin:0 0 10px}
+.rc21-file-tree{border:1px solid var(--border);background:var(--panel2);padding:11px;border-radius:10px;overflow:auto;max-height:54vh}
+#projectFilesTree{margin:0;padding:0;list-style:none}
+#projectFilesTree li{padding:0;margin:0}
+#projectFilesTree button{display:block;width:100%;padding:8px 6px;text-align:left;background:none;color:var(--text);border:0;border-radius:5px;overflow-wrap:anywhere;font-size:12px}
+#projectFilesTree button[aria-current="true"]{background:#e9edff;color:#4050b1}
+#projectFilesTree button:disabled{opacity:.55;cursor:default}
+.rc21-file-workspace{min-width:0}
+#projectFilesSource{min-height:330px;height:50vh;width:100%;resize:vertical;font:12px/1.55 ui-monospace,Consolas,monospace;tab-size:2}
+.rc21-diff{max-height:360px;overflow:auto;background:#f4f6fb;border:1px solid var(--border);border-radius:8px;padding:12px;white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace}
+.rc21-preview{height:340px;width:100%;background:white;border:1px solid var(--border);border-radius:9px}
+.rc21-ai-dialog{width:min(880px,94vw);max-width:94vw}
+#aiGeneratedHtml{width:100%;height:180px;font:12px/1.5 ui-monospace,Consolas,monospace}
+#aiPrompt{min-height:110px}
+.rc21-ai-dialog #aiGeneratedResult{margin-top:12px}
+.member-mode #openAiGenerateBtn,.member-mode #republishCurrentBtn{display:none!important}
+.viewer-mode #saveProjectFilesBtn,.viewer-mode #projectFilesCreateBtn,.viewer-mode #projectFilesDeleteBtn{display:none!important}
+@media(max-width:760px){.rc21-files-layout{grid-template-columns:1fr}.rc21-file-tree{max-height:160px}#projectFilesSource{height:300px;min-height:240px}}
 </style>
 </head>
 <body>
@@ -588,6 +611,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
         <div class="project-top-actions">
           <div class="workspace-actions">
             <button type="button" id="openCreateDialog"><svg class="ui-icon"><use href="#ui-plus"/></svg> 新建项目</button>
+            <button type="button" id="openAiGenerateBtn" class="ghost hidden">AI 生成原型</button>
             <button type="button" class="ghost" id="openUploadDialog"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
           </div>
           <div class="project-search-controls" role="search" aria-label="搜索和筛选原型项目">
@@ -620,6 +644,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
               <a id="previewLink" href="" target="_blank" rel="noopener noreferrer"><svg class="ui-icon"><use href="#ui-eye"/></svg> 预览</a>
               <button type="button" id="openUploadDialogDetail" class="ghost"><svg class="ui-icon"><use href="#ui-upload"/></svg> 上传新版本</button>
               <button type="button" id="openHtmlEditorBtn" class="ghost">在线编辑 HTML</button>
+              <button type="button" id="openProjectFilesBtn" class="ghost">编辑项目文件</button>
               <button type="button" id="goShareDetail" class="ghost"><svg class="ui-icon"><use href="#ui-share"/></svg> 分享</button>
               <button type="button" id="analyzeAxureBtn" class="ghost">Axure 转换评估</button>
             </div>
@@ -638,7 +663,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 正式网站发布</h3><span id="siteHostingState" class="status-chip off">未发布</span></div>
           <div class="inspector-keyline"><span>独立站点链接</span><a id="siteHostingUrl" href="" target="_blank" rel="noopener noreferrer" style="overflow-wrap:anywhere;font-size:12px">未发布</a></div>
           <p id="siteHostingHint" class="hint">静态网站独立域名托管与原型预览分离；需要管理员明确发布。</p>
-          <button type="button" id="siteHostingToggle" class="ghost">发布静态网站</button>
+          <button type="button" id="siteHostingToggle" class="ghost">发布静态网站</button><button type="button" id="republishCurrentBtn" class="ghost hidden">发布当前版本</button>
         </section>
         <section class="card inspector-section" id="deployOverviewCard">
           <div class="inspector-heading"><h3><svg class="ui-icon"><use href="#ui-rocket"/></svg> 自动部署</h3><button type="button" id="openDeployPanel" class="small-link">配置部署 ›</button></div>
@@ -875,6 +900,64 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       </details>
 </div>
 </div>
+</dialog>
+<dialog class="create-dialog rc21-files-dialog" id="projectFilesDialog" aria-labelledby="projectFilesHeading">
+  <div class="create-dialog-header">
+    <h2 id="projectFilesHeading">多文件原型编辑</h2>
+    <button type="button" id="closeProjectFilesBtn" class="ghost">关闭</button>
+  </div>
+  <div class="create-dialog-content">
+    <p class="hint">HTML / CSS / JS / JSON / SVG / 文本文件可编辑；图片和二进制资源原样保留。保存会创建新版本，网站不会自动重新发布。</p>
+    <div class="row rc21-file-actions">
+      <span class="hint" id="projectFilesBase">版本：—</span>
+      <button type="button" class="ghost" id="projectFilesCreateBtn">新增文件</button>
+      <button type="button" class="ghost" id="projectFilesDeleteBtn">删除选中</button>
+      <button type="button" class="ghost" id="projectFilesDiffBtn">查看差异</button>
+      <button type="button" class="ghost" id="projectFilesPreviewBtn">静态预览 HTML</button>
+    </div>
+    <div class="rc21-files-layout">
+      <div class="rc21-file-tree" role="navigation" aria-label="项目文件树">
+        <p class="hint">项目文件</p>
+        <ul id="projectFilesTree"></ul>
+      </div>
+      <div class="rc21-file-workspace">
+        <label class="field">
+          <span id="projectFilesCurrent">选择文件开始编辑</span>
+          <textarea id="projectFilesSource" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="当前文件源码"></textarea>
+        </label>
+        <p id="projectFilesByteCount" class="hint">文本文件上限 180000 字节</p>
+        <pre id="projectFilesDiff" class="rc21-diff hidden" aria-live="polite"></pre>
+        <iframe id="projectFilesPreview" class="rc21-preview hidden" title="不执行脚本的多文件原型静态预览" sandbox="" referrerpolicy="no-referrer"></iframe>
+      </div>
+    </div>
+    <p id="projectFilesStatus" class="hint" role="status" aria-live="polite"></p>
+    <div class="upload-footer">
+      <button type="button" id="cancelProjectFilesBtn" class="ghost">取消</button>
+      <button type="button" id="saveProjectFilesBtn">保存为新版本</button>
+    </div>
+  </div>
+</dialog>
+<dialog class="create-dialog rc21-ai-dialog" id="aiGenerateDialog" aria-labelledby="aiGenerateHeading">
+  <div class="create-dialog-header">
+    <h2 id="aiGenerateHeading">AI 生成 HTML 原型</h2>
+    <button type="button" id="closeAiGenerateBtn" class="ghost">关闭</button>
+  </div>
+  <div class="create-dialog-content">
+    <p class="hint">由管理员调用 DeepSeek 生成单页 HTML 草稿。需要先配置服务器 API 密钥；生成消耗 API 费用。草稿不会自动发布。</p>
+    <label class="field"><span>项目名称</span><input id="aiProjectName" maxlength="100" placeholder="例如：金融后台操作台"></label>
+    <label class="field"><span>页面描述（2400 字以内）</span><textarea id="aiPrompt" maxlength="2400" placeholder="描述页面用途、板块、表单、配色、交互和适配设备…"></textarea></label>
+    <div class="row">
+      <button type="button" id="aiGenerateActionBtn">生成草稿</button>
+      <span id="aiGenerationQuota" class="hint"></span>
+    </div>
+    <div id="aiGeneratedResult" class="hidden">
+      <div class="row rc21-file-actions"><button type="button" id="aiPreviewToggleBtn" class="ghost">查看静态预览</button><button type="button" id="aiLoadExistingBtn" class="ghost">放入当前单 HTML 编辑器</button></div>
+      <textarea id="aiGeneratedHtml" spellcheck="false" aria-label="生成的 HTML 草稿源码"></textarea>
+      <iframe id="aiGeneratedPreview" class="rc21-preview" title="AI 草稿静态预览，不执行脚本" sandbox="" referrerpolicy="no-referrer"></iframe>
+      <button type="button" id="aiCreateProjectBtn">审核后创建项目</button>
+    </div>
+    <p id="aiGeneratedStatus" class="hint" role="status" aria-live="polite"></p>
+  </div>
 </dialog>
 <dialog class="create-dialog rc21-editor-dialog" id="htmlEditorDialog" aria-labelledby="htmlEditorHeading">
   <div class="create-dialog-header"><h2 id="htmlEditorHeading">在线编辑 HTML 原型</h2><button type="button" id="closeHtmlEditorBtn" class="ghost">关闭</button></div>
@@ -1485,8 +1568,9 @@ function renderDetail() {
   $("siteHostingUrl").href = sitePublished ? selected.siteUrl : "";
   $("siteHostingToggle").disabled = !siteAvailable || selected.lifecycleState === "trashed";
   $("siteHostingToggle").textContent = sitePublished ? "停止发布" : "发布静态网站";
+  $("republishCurrentBtn").classList.toggle("hidden",!sitePublished||!selected.hasUnpublishedChanges||sessionPrincipal.type==="member");
   $("siteHostingHint").textContent = siteAvailable
-    ? "当前项目使用独立子域名。网站 JS 可运行；发布会向持有地址的访客公开内容。停止发布后立即返回 404。"
+    ? (sitePublished ? "已公开 v"+selected.siteVersion+"；当前草稿 v"+selected.currentVersion+(selected.hasUnpublishedChanges?" 尚未发布。":" 与已发布一致。")+" 网站不会因保存版本而自动更新。" : "站点尚未发布，确认后将当前版本发布到独立域名。")
     : "尚未配置独立站点运行域名；预览功能保持不变。";
   const lc = selected.lifecycleState || "active";
   const lcNames = { active: "进行中", archived: "已归档", trashed: "回收站" };
@@ -3145,6 +3229,370 @@ $("publishHtmlEditorBtn").addEventListener("click",async()=>{
     }
   }finally{setBusy(btn,false);}
 });
+
+
+// RC21B — editable HTML/CSS/JS file tree. All untrusted content is assigned
+// via .value, .textContent or a CSP-locked sandbox iframe, never innerHTML.
+let sourceSession=null;
+let sourceLoadRequest=0;
+const sourceBytes=text=>new TextEncoder().encode(text).byteLength;
+const draftFrameCsp="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; connect-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'\">";
+function sourceCanEdit(){
+  return !!sourceSession && selected?.id===sourceSession.projectId &&
+    (sessionPrincipal.type!=="member" || selected?.role==="editor");
+}
+function sourceStatus(text){$("projectFilesStatus").textContent=text;}
+function sourceCurrentDraft(){
+  if(!sourceSession || !sourceSession.current)return;
+  if(!sourceCanEdit())return;
+  const path=sourceSession.current;
+  if(sourceSession.changes.get(path)?.remove)return;
+  const value=$("projectFilesSource").value;
+  const original=sourceSession.originals.get(path)??"";
+  if(value===original)sourceSession.changes.delete(path);
+  else sourceSession.changes.set(path,{path,content:value});
+}
+function sourceRenderTree(){
+  const list=$("projectFilesTree");list.textContent="";
+  if(!sourceSession)return;
+  for(const file of sourceSession.manifest.files){
+    const row=document.createElement("li");
+    const btn=document.createElement("button");
+    btn.type="button";
+    btn.textContent=file.path+(file.editable?"":" · 资源文件");
+    btn.disabled=!file.editable||sourceSession.changes.get(file.path)?.remove===true;
+    btn.setAttribute("aria-current",String(sourceSession.current===file.path));
+    btn.addEventListener("click",()=>sourceOpenFile(file.path));
+    row.appendChild(btn);list.appendChild(row);
+  }
+  for(const [path,change] of sourceSession.changes){
+    if(sourceSession.manifest.files.some(f=>f.path===path))continue;
+    if(change.remove)continue;
+    const li=document.createElement("li"),btn=document.createElement("button");
+    btn.type="button";btn.textContent=path+" · 新建";
+    btn.setAttribute("aria-current",String(sourceSession.current===path));
+    btn.addEventListener("click",()=>sourceOpenFile(path));
+    li.appendChild(btn);list.appendChild(li);
+  }
+  $("projectFilesBase").textContent="基线 v"+sourceSession.manifest.baseVersion+
+    " · 待保存 "+sourceSession.changes.size+" 项";
+  $("projectFilesByteCount").textContent=
+    sourceBytes($("projectFilesSource").value).toLocaleString()+" / 180,000 字节";
+  $("saveProjectFilesBtn").disabled=!sourceCanEdit()||sourceSession.changes.size===0||
+    sourceSession.changes.size>16 ||
+    [...sourceSession.changes.values()].some(c=>!c.remove&&sourceBytes(c.content)>180000);
+}
+async function sourceOpenFile(path){
+  if(!sourceSession)return;
+  sourceCurrentDraft();
+  const request=++sourceLoadRequest,session=sourceSession;
+  session.current=null; // do not treat stale textarea as the not-yet-loaded file
+  $("projectFilesCurrent").textContent="读取 "+path+"…";
+  $("projectFilesSource").value="";
+  $("projectFilesSource").readOnly=true;
+  $("projectFilesDiff").classList.add("hidden");
+  $("projectFilesPreview").classList.add("hidden");
+  const change=session.changes.get(path);
+  try{
+    if(!session.originals.has(path)){
+      if(!session.manifest.files.some(f=>f.path===path)){
+        session.originals.set(path,"");
+      }else{
+        const result=await api("/api/projects/"+session.projectId+
+          "/source/file?path="+encodeURIComponent(path));
+        if(sourceSession!==session||request!==sourceLoadRequest)return;
+        session.originals.set(path,result.content);
+      }
+    }
+    if(sourceSession!==session||request!==sourceLoadRequest)return;
+    session.current=path;
+    $("projectFilesCurrent").textContent=path;
+    $("projectFilesSource").value=change?.remove?"":change?.content??session.originals.get(path)??"";
+    $("projectFilesSource").readOnly=!sourceCanEdit();
+    sourceRenderTree();
+  }catch(err){sourceStatus("文件读取失败："+friendlyError(err));}
+}
+function sourceClear(){
+  ++sourceLoadRequest;
+  $("projectFilesPreview").srcdoc="";
+  $("projectFilesSource").value="";
+  $("projectFilesDiff").textContent="";
+  sourceSession=null;
+}
+function sourceClose(force=false){
+  if(!force && sourceSession){
+    sourceCurrentDraft();
+    if(sourceSession.changes.size && !window.confirm(
+      "还有 "+sourceSession.changes.size+" 个文件的修改未保存，确定放弃？"))return;
+  }
+  $("projectFilesDialog").close();
+}
+$("openProjectFilesBtn").addEventListener("click",async()=>{
+  if(!selected){feedback("请先选择项目",false);return;}
+  const projectId=selected.id,btn=$("openProjectFilesBtn");
+  setBusy(btn,true,"加载项目文件…");
+  try{
+    const manifest=await api("/api/projects/"+projectId+"/source/files");
+    if(selected?.id!==projectId)return;
+    sourceSession={projectId,manifest,changes:new Map(),originals:new Map(),current:null};
+    $("projectFilesCurrent").textContent="选择可编辑的文本文件";
+    $("projectFilesSource").value="";
+    $("projectFilesSource").readOnly=!sourceCanEdit();
+    $("projectFilesStatus").textContent="保存为新版本不会自动发布公开网站。";
+    sourceRenderTree();
+    $("projectFilesDialog").showModal();
+    const first=manifest.files.find(f=>f.path===manifest.entryPoint&&f.editable)||
+      manifest.files.find(f=>f.editable);
+    if(first)await sourceOpenFile(first.path);
+  }catch(err){feedback("无法打开多文件编辑器："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+$("projectFilesSource").addEventListener("input",()=>{
+  sourceCurrentDraft();sourceRenderTree();
+});
+$("closeProjectFilesBtn").addEventListener("click",()=>sourceClose());
+$("cancelProjectFilesBtn").addEventListener("click",()=>sourceClose());
+$("projectFilesDialog").addEventListener("cancel",event=>{
+  sourceCurrentDraft();
+  if(sourceSession?.changes.size&&!window.confirm("草稿未保存，确定关闭？"))
+    event.preventDefault();
+});
+$("projectFilesDialog").addEventListener("close",sourceClear);
+$("projectFilesCreateBtn").addEventListener("click",async()=>{
+  if(!sourceSession||!sourceCanEdit())return;
+  sourceCurrentDraft();
+  const path=window.prompt("输入新文件路径（例如 assets/theme.css）");
+  if(!path)return;
+  if(sourceSession.manifest.files.some(f=>f.path.toLowerCase()===path.toLowerCase()) ||
+    sourceSession.changes.has(path)){
+    sourceStatus("该路径已存在。");return;
+  }
+  if(!/\.(html?|css|m?js|json|txt|md|svg)$/i.test(path)){
+    sourceStatus("只能新增受支持的 HTML/CSS/JS/JSON/TXT/MD/SVG 文本文件。");return;
+  }
+  sourceSession.changes.set(path,{path,content:""});
+  await sourceOpenFile(path);
+  sourceRenderTree();
+});
+$("projectFilesDeleteBtn").addEventListener("click",()=>{
+  if(!sourceSession||!sourceSession.current||!sourceCanEdit())return;
+  sourceCurrentDraft();
+  const path=sourceSession.current;
+  if(path===sourceSession.manifest.entryPoint){
+    sourceStatus("不能删除入口 HTML。");return;
+  }
+  if(!window.confirm("确定将 "+path+" 从下一个版本中移除？历史版本不会更改。"))return;
+  const existing=sourceSession.manifest.files.some(f=>f.path===path);
+  if(existing)sourceSession.changes.set(path,{path,remove:true});
+  else sourceSession.changes.delete(path);
+  sourceSession.current=null;
+  $("projectFilesCurrent").textContent="已标记删除；请保存为新版本";
+  $("projectFilesSource").value="";
+  sourceRenderTree();
+});
+$("projectFilesDiffBtn").addEventListener("click",()=>{
+  if(!sourceSession)return;
+  sourceCurrentDraft();sourceRenderTree();
+  const lines=[];
+  for(const change of sourceSession.changes.values()){
+    lines.push("### "+change.path);
+    if(change.remove){lines.push("将删除此文件");continue;}
+    const old=(sourceSession.originals.get(change.path)??"").split("\n");
+    const next=change.content.split("\n");
+    const count=Math.min(Math.max(old.length,next.length),120);
+    for(let i=0;i<count;i++){
+      if(old[i]!==next[i]){
+        if(i<old.length)lines.push("- "+String(i+1)+": "+old[i].slice(0,200));
+        if(i<next.length)lines.push("+ "+String(i+1)+": "+next[i].slice(0,200));
+      }
+    }
+    if(Math.max(old.length,next.length)>count)lines.push("…仅展示前 120 行差异，请以源码检查为准");
+  }
+  $("projectFilesDiff").textContent=lines.join("\n")||"当前没有待保存修改";
+  $("projectFilesDiff").classList.remove("hidden");
+  $("projectFilesPreview").classList.add("hidden");
+});
+$("projectFilesPreviewBtn").addEventListener("click",async()=>{
+  if(!sourceSession)return;
+  sourceCurrentDraft();
+  const session=sourceSession,path=session.manifest.entryPoint;
+  if(session.changes.get(path)?.remove)return;
+  try{
+    if(!session.originals.has(path)){
+      const file=await api("/api/projects/"+session.projectId+
+        "/source/file?path="+encodeURIComponent(path));
+      if(sourceSession!==session)return;
+      session.originals.set(path,file.content);
+    }
+    const html=session.changes.get(path)?.content??session.originals.get(path);
+    $("projectFilesPreview").srcdoc="<!doctype html>"+draftFrameCsp+html;
+    $("projectFilesPreview").classList.remove("hidden");
+    $("projectFilesDiff").classList.add("hidden");
+    sourceStatus("静态草稿预览：禁用 JS、网络请求及表单。外部 CSS/图片请保存后使用项目预览检查。");
+  }catch(err){sourceStatus("预览失败："+friendlyError(err));}
+});
+$("saveProjectFilesBtn").addEventListener("click",async()=>{
+  if(!sourceSession||!sourceCanEdit())return;
+  sourceCurrentDraft();sourceRenderTree();
+  const session=sourceSession,changes=[...session.changes.values()];
+  if(!changes.length){sourceStatus("没有待保存的修改");return;}
+  if(changes.length>16||changes.some(c=>!c.remove&&sourceBytes(c.content)>180000)){
+    sourceStatus("最多 16 个变更，且每个文件必须不超过 180000 字节");return;
+  }
+  const btn=$("saveProjectFilesBtn");setBusy(btn,true,"保存新版本…");
+  try{
+    const result=await api("/api/projects/"+session.projectId+"/source/publish",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({baseVersion:session.manifest.baseVersion,
+        baseRevision:session.manifest.baseRevision,changes})
+    });
+    sourceClose(true);
+    if(!result.unchanged){
+      await selectProject(session.projectId);await loadProjects();
+    }
+    feedback(result.unchanged?"内容未变化，未生成新版本":
+      "已保存为 v"+result.version+"，如需公开请另外点击“发布当前版本”。",true);
+  }catch(err){
+    sourceStatus(err?.json?.code==="EDITOR_VERSION_CONFLICT"
+      ?"版本已被其他人或 AI 工具更新，请先复制当前草稿，重新打开最新版本后再提交。"
+      :"保存失败："+friendlyError(err));
+  }finally{setBusy(btn,false);}
+});
+
+
+// RC21C: optional, administrator-only AI draft generation. Provider keys
+// remain server-side; nothing is published until a distinct user action.
+let aiDraft=null;
+function showAiDraftPreview(html){
+  $("aiGeneratedPreview").srcdoc="<!doctype html>"+draftFrameCsp+html;
+}
+function aiShowStatus(message){$("aiGeneratedStatus").textContent=message;}
+function aiClear(){
+  aiDraft=null;
+  $("aiGeneratedHtml").value="";
+  $("aiPrompt").value="";
+  $("aiGeneratedResult").classList.add("hidden");
+  $("aiGeneratedPreview").srcdoc="";
+  aiShowStatus("");
+}
+$("openAiGenerateBtn").addEventListener("click",async()=>{
+  if(sessionPrincipal.type==="member")return;
+  $("aiGenerateDialog").showModal();
+  if(!$("aiProjectName").value)$("aiProjectName").value="AI 生成原型";
+  try{
+    const status=await api("/api/ai/status");
+    $("aiGenerationQuota").textContent="本服务进程今日剩余调用："+status.remainingCalls;
+  }catch(err){aiShowStatus(friendlyError(err));}
+});
+$("closeAiGenerateBtn").addEventListener("click",()=>{
+  if(aiDraft&&!window.confirm("关闭后未保存的 AI 草稿将丢弃，确定关闭？"))return;
+  $("aiGenerateDialog").close();
+});
+$("aiGenerateDialog").addEventListener("close",aiClear);
+$("aiGenerateActionBtn").addEventListener("click",async()=>{
+  const prompt=$("aiPrompt").value.trim();
+  if(!prompt||prompt.length>2400){
+    aiShowStatus("请输入不超过 2400 字的详细页面要求。");return;
+  }
+  const btn=$("aiGenerateActionBtn");setBusy(btn,true,"AI 正在生成…");
+  try{
+    const result=await api("/api/ai/generate",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({prompt})
+    });
+    aiDraft=result;
+    $("aiGeneratedHtml").value=result.html;
+    $("aiGeneratedResult").classList.remove("hidden");
+    showAiDraftPreview(result.html);
+    $("aiGenerationQuota").textContent="生成用量："+(result.usedTokens??"未知")+" tokens";
+    aiShowStatus("已生成待审核草稿；请先检查代码/效果，再创建项目或放入已有编辑器。");
+  }catch(err){aiShowStatus("生成失败："+friendlyError(err));}
+  finally{setBusy(btn,false);}
+});
+$("aiGeneratedHtml").addEventListener("input",()=>{
+  if(aiDraft){
+    aiDraft.html=$("aiGeneratedHtml").value;
+    aiShowStatus("已修改生成草稿，请点击查看静态预览检查效果。");
+  }
+});
+$("aiPreviewToggleBtn").addEventListener("click",()=>{
+  if(!aiDraft)return;
+  showAiDraftPreview($("aiGeneratedHtml").value);
+  aiShowStatus("预览为脚本禁用的沙箱。保存后可查看完整原型。");
+});
+$("aiCreateProjectBtn").addEventListener("click",async()=>{
+  if(!aiDraft||sessionPrincipal.type==="member")return;
+  const html=$("aiGeneratedHtml").value;
+  const name=$("aiProjectName").value.trim();
+  if(!name||name.length>100||sourceBytes(html)>180000||!html.toLowerCase().includes("<html")){
+    aiShowStatus("请填写项目名称，并确保 HTML 合法且不超过 180000 字节。");return;
+  }
+  const btn=$("aiCreateProjectBtn");setBusy(btn,true,"创建项目…");
+  try{
+    const created=await api("/api/projects",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,html})
+    });
+    $("aiGenerateDialog").close();
+    await loadProjects();
+    await selectProject(created.id);
+    feedback("AI 草稿已创建为独立项目；公开网站需要单独审核并发布。",true);
+  }catch(err){aiShowStatus("创建失败："+friendlyError(err));}
+  finally{setBusy(btn,false);}
+});
+$("aiLoadExistingBtn").addEventListener("click",async()=>{
+  if(!aiDraft||!selected||sessionPrincipal.type==="member"){
+    aiShowStatus("请先选择一个具有编辑权限的单文件 HTML 项目。");return;
+  }
+  const html=$("aiGeneratedHtml").value,id=selected.id;
+  const btn=$("aiLoadExistingBtn");setBusy(btn,true,"读取原版本…");
+  try{
+    const source=await api("/api/projects/"+id+"/html-editor");
+    if(selected.id!==id)return;
+    $("aiGenerateDialog").close();
+    htmlEditorBase=source;
+    $("htmlEditorSource").value=html;
+    $("htmlEditorSource").readOnly=false;
+    $("publishHtmlEditorBtn").disabled=false;
+    $("htmlEditorVersion").textContent="基线 v"+source.version+" · AI 待审核草稿";
+    $("htmlEditorStatus").textContent="AI 已填入编辑器，确认后才能保存为新版本；公开发布需再确认。";
+    htmlEditorSetCount();
+    htmlEditorStaticPreview();
+    $("htmlEditorDialog").showModal();
+  }catch(err){
+    aiShowStatus(err?.json?.code==="EDITOR_MULTIFILE_UNSUPPORTED"
+      ?"当前项目含多文件，请使用多文件编辑器，或创建新的单文件 AI 项目。"
+      :"读取旧版本失败："+friendlyError(err));
+  }finally{setBusy(btn,false);}
+});
+$("republishCurrentBtn").addEventListener("click",async()=>{
+  if(!selected||sessionPrincipal.type==="member"||
+     !window.confirm("确定公开发布当前 v"+selected.currentVersion+" 版本？已发布网站将切换至该版本。"))return;
+  const id=selected.id,btn=$("republishCurrentBtn");
+  setBusy(btn,true,"发布中…");
+  try{
+    await api("/api/projects/"+id,{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({siteEnabled:true})
+    });
+    await selectProject(id);
+    feedback("已确认发布最新版本，公开网站现在指向当前版本。",true);
+  }catch(err){feedback("发布失败："+friendlyError(err),false);}
+  finally{setBusy(btn,false);}
+});
+// Feature detection is authenticated, and AI creation is kept away from
+// project-scoped members even if the model server happens to be configured.
+const originalSetAuthorized=setAuthorized;
+setAuthorized=function(ok){
+  originalSetAuthorized(ok);
+  $("openAiGenerateBtn").classList.add("hidden");
+  if(ok&&sessionPrincipal.type==="admin"){
+    api("/api/ai/status").then(status=>{
+      if(isAuthorized&&sessionPrincipal.type==="admin"&&status.enabled)
+        $("openAiGenerateBtn").classList.remove("hidden");
+    }).catch(()=>{});
+  }
+};
 
 </script>
 </body>

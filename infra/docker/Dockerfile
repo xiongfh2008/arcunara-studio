@@ -19,6 +19,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 # Application code (server, lib modules, workbench page).
 COPY apps/api ./apps/api
+# API routes import the Axure IR and RP/1 converter packages at startup.
+COPY packages/rp-converter ./packages/rp-converter
 
 ENV NODE_ENV=production
 

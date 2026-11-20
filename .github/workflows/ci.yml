@@ -33,5 +33,11 @@ jobs:
       - name: Deployment preflight
         run: npm run preflight
 
+      - name: RC21 isolated preview preflight
+        run: npm run preflight:rc21
+
       - name: Tests
         run: npm test
+
+      - name: RC21 Docker image build smoke
+        run: docker build --file infra/docker/Dockerfile --tag arcunara-studio:rc21-ci .
