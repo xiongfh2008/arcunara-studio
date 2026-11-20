@@ -690,12 +690,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     <label class="field"><span>成员邮箱</span><input id="newMemberEmail" type="email" maxlength="254" autocomplete="off"></label>
     <button type="button" id="createTeamUserBtn">创建成员</button>
     <div id="teamCredentialBox" class="hidden">
-      <p class="hint">请立即安全传递此访问凭证，关闭弹窗后无法再次查看。</p>
+      <p class="hint">请立即安全传递此一次性凭证或激活码，关闭弹窗后无法再次查看。</p>
       <code id="teamCredential" class="credential-once"></code>
       <button type="button" class="ghost" id="copyTeamCredential">复制凭证</button>
     </div>
     <h3>已有成员</h3>
     <ul id="teamUsersList" class="team-list" aria-label="已创建的成员账号"></ul>
+    <div id="authAuditPanel" class="hidden">
+      <h3>最近账号与权限操作</h3>
+      <p class="hint">仅记录操作类型、成员/项目标识和时间，不保存密码、激活码或会话 Token。</p>
+      <ul id="authAuditList" class="team-list" aria-label="账号权限审计记录"></ul>
+    </div>
   </div>
 </dialog>
 <dialog class="create-dialog" id="axureReadinessDialog" aria-labelledby="axureReadinessHeading">
@@ -1877,6 +1882,32 @@ function showIssuedCredential(value) {
   $("teamCredential").textContent=value;
   $("teamCredentialBox").classList.remove("hidden");
 }
+async function refreshAuthAudit() {
+  const available=sessionPrincipal.type==="admin" &&
+    sessionPrincipal.memberLoginEnabled===true;
+  $("authAuditPanel").classList.toggle("hidden",!available);
+  if(!available)return;
+  const result=await api("/api/audit/auth");
+  const list=$("authAuditList");
+  list.textContent="";
+  for(const entry of (result.events||[]).slice(0,30)) {
+    const li=document.createElement("li");
+    const body=document.createElement("span");
+    const title=document.createElement("strong");
+    title.textContent=entry.action;
+    const detail=document.createElement("small");
+    detail.textContent=fmtTime(entry.at)+" · 用户 "+entry.userId+
+      (entry.projectId?" · 项目 "+entry.projectId.slice(0,8):"");
+    body.append(title,detail);
+    li.appendChild(body);
+    list.appendChild(li);
+  }
+  if(!list.childNodes.length) {
+    const li=document.createElement("li");
+    li.textContent="暂无审计记录";
+    list.appendChild(li);
+  }
+}
 async function refreshTeamUsers() {
   if(sessionPrincipal.type!=="admin"||sessionPrincipal.teamEnabled!==true)return;
   const data=await api("/api/users");
@@ -1889,7 +1920,7 @@ async function refreshTeamUsers() {
     const strong=document.createElement("strong");
     strong.textContent=u.name+" · "+u.email;
     const status=document.createElement("small");
-    status.textContent=u.enabled?"已启用":"已停用";
+    status.textContent=(u.enabled?"已启用":"已停用")+" · "+(u.passwordSet?"密码已激活":"未激活密码");
     info.append(strong,status);
     const actions=document.createElement("span");
     actions.className="row";
