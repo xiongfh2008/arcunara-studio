@@ -201,6 +201,9 @@ test("RC20B rate limits repeated incorrect passwords and disabled accounts fail 
   try{
     const {user}=await setup(app);
     await activate(app,user);
+    const active=await login(app,user.email,"BetterPassphrase-1234");
+    assert.equal(active.status,200);
+    const stillCookie=sessionFrom(active);
     for(let i=0;i<8;i++){
       const failed=await login(app,user.email,"BadPassword-012345");
       assert.equal(failed.status,401);
@@ -211,7 +214,13 @@ test("RC20B rate limits repeated incorrect passwords and disabled accounts fail 
       body:JSON.stringify({enabled:false})
     });
     assert.equal(other.status,200);
-    // An account's prior active sessions are also denied when disabled.
-    assert.equal((await browser(app,"/api/auth/session")).status,401);
+    // Disabled member sessions are not revived on re-enable.
+    assert.equal((await browser(app,"/api/auth/session",{cookie:stillCookie})).status,401);
+    const again=await app.api("/api/users/"+user.id,{
+      method:"PATCH",headers:{"content-type":"application/json"},
+      body:JSON.stringify({enabled:true})
+    });
+    assert.equal(again.status,200);
+    assert.equal((await browser(app,"/api/auth/session",{cookie:stillCookie})).status,401);
   }finally{await app.stop();await app.cleanup();}
 });
