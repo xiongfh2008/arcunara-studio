@@ -1,3 +1,7 @@
+## RC23 — 原生 Axure .rp 导出试点
+
+新增需 opt-in 的离线 Zee-RP 编译 Worker 与可校验的 RP9 .rp 下载流程。详细前置与局限： [RC23_NATIVE_RP_EXPORT.md](docs/RC23_NATIVE_RP_EXPORT.md)。
+
 # Arcunara Studio
 
 面向全球用户的 AI 原型转换与托管 SaaS：HTML/ZIP 原型一键托管、更新与分享；后续支持 HTML → Axure RP11 原生 `.rp` 转换、CLI 与各 AI 工具 Skill。

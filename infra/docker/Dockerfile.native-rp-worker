@@ -1,0 +1,29 @@
+# RC23: native RP9 export worker, NEVER the API image.
+# Build requires internet; runtime must have network_mode: none.
+# Intentionally pin Zee-RP to the commit already used by RC18D contract CI.
+FROM node:24-bookworm-slim
+
+ARG ZEE_RP_COMMIT=6cc2b8695b1b148548eac4fd776c2f47be358335
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git python3 python3-venv python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY apps/api ./apps/api
+COPY packages/rp-converter ./packages/rp-converter
+
+RUN git clone https://github.com/LilZeeCN/zee-rp.git /opt/zee-rp \
+    && git -C /opt/zee-rp checkout --detach "${ZEE_RP_COMMIT}" \
+    && test "$(git -C /opt/zee-rp rev-parse HEAD)" = "${ZEE_RP_COMMIT}" \
+    && cd /opt/zee-rp && npm ci --omit=dev \
+    && python3 -m venv /opt/zee-rp/.venv \
+    && /opt/zee-rp/.venv/bin/pip install --no-cache-dir -r /opt/zee-rp/requirements.txt \
+    && rm -rf /opt/zee-rp/.git
+
+ENV PATH="/opt/zee-rp/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ENV NODE_ENV=production
+USER node
+WORKDIR /app
+CMD ["node","packages/rp-converter/job-worker.mjs"]

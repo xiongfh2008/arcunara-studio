@@ -1,0 +1,40 @@
+# RC23 native .rp worker: run only with explicit --profile native-export.
+# API and preview stay on their existing ports, domains and volumes.
+# Requires the user-created Axure RP9 blank file at
+# infra/rc21-preview/secrets/rp9_blank.rp (NEVER commit it).
+services:
+  api:
+    environment:
+      ARCU_NATIVE_RP_EXPORT_ENABLED: "1"
+  native-rp-worker:
+    profiles: ["native-export"]
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.native-rp-worker
+      args:
+        ZEE_RP_COMMIT: 6cc2b8695b1b148548eac4fd776c2f47be358335
+    image: arcunara-studio:native-rp-worker-rc23
+    container_name: arcunara-native-rp-worker-rc23
+    user: node
+    read_only: true
+    network_mode: none
+    working_dir: /app
+    environment:
+      ARCU_DATA_DIR: /app/data
+      ARCU_RP_JOBS_DIR: /app/rp-jobs
+      ARCU_ZEE_RP_ROOT: /opt/zee-rp
+      AXURE_BLANK_TEMPLATE_RP9: /run/secrets/rp9_blank.rp
+    volumes:
+      - ./data:/app/data:ro
+      - ./data/.rp-jobs:/app/rp-jobs:rw
+      - ./secrets/rp9_blank.rp:/run/secrets/rp9_blank.rp:ro
+    tmpfs:
+      - /tmp:size=768m,mode=1777
+    cpus: 2.0
+    mem_limit: 2g
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
