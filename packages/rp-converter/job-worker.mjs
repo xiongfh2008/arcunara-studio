@@ -35,7 +35,7 @@ function safeJobDirectories(dataDir,projectId,version,storage) {
   if(!UUID.test(projectId)||!Number.isSafeInteger(version)||version<1)
     throw Error("Invalid signed job project/version");
   if(storage==="legacy-root")return project;
-  if(storage==="versioned")return path.join(project,"versions",String(version));
+  if(storage==="versions")return path.join(project,"versions",String(version));
   throw Error("Invalid job storage");
 }
 function execNode(args,{cwd,timeoutMs=600000,env=process.env}={}) {
