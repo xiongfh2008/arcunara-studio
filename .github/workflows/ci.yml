@@ -41,3 +41,6 @@ jobs:
 
       - name: RC21 Docker image build smoke
         run: docker build --file infra/docker/Dockerfile --tag arcunara-studio:rc21-ci .
+
+      - name: RC23 offline Zee-RP worker image build smoke
+        run: docker build --file infra/docker/Dockerfile.native-rp-worker --tag arcunara-studio:native-rp-ci .
