@@ -15,6 +15,7 @@ import { inspectAxureProject } from "./axure.mjs";
 import { analyzeAxureReadiness } from "./axure-readiness.mjs";
 import { buildEditableIR } from "../../../packages/rp-converter/ir.mjs";
 import { convertIRToRP1 } from "../../../packages/rp-converter/rp1-bridge.mjs";
+import { createNativeRpJobs } from "./native-rp-jobs.mjs";
 import { generateGithubWorkflow } from "./github-workflow.mjs";
 import { compareProjectVersions } from "./version-diff.mjs";
 import { exportProjectVersionZip } from "./zip-export.mjs";
@@ -33,6 +34,8 @@ const WORKFLOW_RE = new RegExp(`^/api/projects/${PROJECT_ID}/github-workflow$`);
 const AXURE_READINESS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-readiness$`);
 const AXURE_IR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-ir$`);
 const AXURE_RP1_RE = new RegExp(`^/api/projects/${PROJECT_ID}/axure-rp1$`);
+const NATIVE_RP_CREATE_RE = new RegExp(`^/api/projects/${PROJECT_ID}/native-rp-export$`);
+const NATIVE_RP_JOB_RE = new RegExp(`^/api/projects/${PROJECT_ID}/native-rp-export/([0-9a-f-]{36})(/download)?$`);
 const VERSIONS_RE = new RegExp(`^/api/projects/${PROJECT_ID}/versions$`);
 const HTML_EDITOR_RE = new RegExp(`^/api/projects/${PROJECT_ID}/html-editor$`);
 const SOURCE_FILES_RE = new RegExp(`^/api/projects/${PROJECT_ID}/source/files$`);
@@ -88,6 +91,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
   const team = createTeamAccess(config, store);
   const passwords=createMemberPasswords(config,store);
   const ai=createAiGenerator(config);
+  const nativeRpJobs=createNativeRpJobs(config,store);
   // The internal workbench is static, contains no credentials and remains
   // reachable without an API bearer token (as in previous versions).
   let consoleHtml = null;
@@ -122,6 +126,7 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
       .replace("__ARCU_MEMBER_LOGIN_MODE_VALUE__", String(passwords.enabled))
       .replace("__ARCU_PUBLIC_PREVIEW_MODE_VALUE__", String(config.stagingPublicPreview === true))
       .replace("__ARCU_AXURE_NATIVE_ORIGIN_VALUE__", JSON.stringify(config.axureNativeOrigin || null))
+      .replace("__ARCU_NATIVE_RP_ENABLED_VALUE__", String(config.nativeRpExportEnabled === true))
       .replace("__ARCU_SITE_DOMAIN_VALUE__", JSON.stringify(config.siteHostingEnabled ? config.siteDomain : null));
 
     const localCookie = localSession.issueCookie(req);
@@ -512,6 +517,32 @@ export function createApiHandler({ config, store, auth, previewTickets, version,
         const ir = await buildEditableIR(store, rp1Match[1], requested);
         const project = await store.getProject(rp1Match[1]);
         return sendJson(res, 200, convertIRToRP1(ir, { projectName: project.name }));
+      }
+
+      // RC23: authenticated native RP9 compilation pipeline. The API queues
+      // validated RP/1 JSON; an OFFLINE sidecar executes Zee-RP and writes
+      // a structurally verified .rp. No deploy keys or team sessions here.
+      const nativeJobMatch = NATIVE_RP_JOB_RE.exec(pathname);
+      if (nativeJobMatch && req.method === "GET") {
+        if(req.teamMember||req.deployKey)
+          return sendJson(res,403,{error:"Administrator required",code:"RP_EXPORT_FORBIDDEN"});
+        if(nativeJobMatch[3]==="/download") {
+          return await nativeRpJobs.download(res,nativeJobMatch[1],nativeJobMatch[2]);
+        }
+        return sendJson(res,200,
+          await nativeRpJobs.get(nativeJobMatch[1],nativeJobMatch[2]));
+      }
+      const nativeCreateMatch = NATIVE_RP_CREATE_RE.exec(pathname);
+      if (nativeCreateMatch && req.method === "POST") {
+        if(req.teamMember||req.deployKey)
+          return sendJson(res,403,{error:"Administrator required",code:"RP_EXPORT_FORBIDDEN"});
+        const payload=await readJsonPayload(req,config.limits);
+        if(payload?.version!==undefined &&
+           (!Number.isSafeInteger(payload.version)||payload.version<1)) {
+          throw new ApiError(400,"Invalid version","INVALID_VERSION");
+        }
+        const result=await nativeRpJobs.enqueue(nativeCreateMatch[1],payload?.version);
+        return sendJson(res,202,result);
       }
 
       // GitHub integration is opt-in: provide a downloadable workflow only.
