@@ -121,7 +121,7 @@ export function createNativeRpJobs(config,store) {
         const createdAt=new Date().toISOString();
         await fs.writeFile(path.join(dir,"source.rp1.json"),text+"\n",{flag:"wx",mode:0o600});
         const request={schema:"arcunara.native-rp-job.v1",id,projectId,
-          version:actualVersion,storage:entry.storage||"versioned",
+          version:actualVersion,storage:entry.storage||"versions",
           createdAt,sourceDirectory:sourceDir,
           sourceSha256:crypto.createHash("sha256").update(text+"\n").digest("hex"),
           mappedWidgets:report.mapped,warningCount:report.warnings.length,
