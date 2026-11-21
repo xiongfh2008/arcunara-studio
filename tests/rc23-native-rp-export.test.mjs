@@ -128,7 +128,9 @@ test("deploy keys and member tokens cannot access native export",async()=>{
     });
     assert.equal(users.status,201);
     const member=users.json.token;
-    assert.equal((await apiPost(app,base,{version:1},{token:member})).status===401,false);
+    const denied=await app.api(base,{method:"POST",token:member,
+      headers:{"content-type":"application/json"},body:JSON.stringify({version:1})});
+    assert.equal(denied.status,404); // No project membership => hidden existence
     const key=await app.api(`/api/projects/${id}/deploy-keys`,{
       method:"POST",headers:{"content-type":"application/json"},body:"{}"
     });
