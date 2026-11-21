@@ -552,6 +552,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   window.__ARCU_MEMBER_LOGIN_ENABLED__ = __ARCU_MEMBER_LOGIN_MODE_VALUE__;
   window.__ARCU_STAGING_PUBLIC_PREVIEW__ = __ARCU_PUBLIC_PREVIEW_MODE_VALUE__;
   window.__ARCU_AXURE_NATIVE_ORIGIN__ = __ARCU_AXURE_NATIVE_ORIGIN_VALUE__;
+  window.__ARCU_NATIVE_RP_EXPORT__ = __ARCU_NATIVE_RP_ENABLED_VALUE__;
   window.__ARCU_SITE_DOMAIN__ = __ARCU_SITE_DOMAIN_VALUE__;
 </script>
 <header class="shell-header">
@@ -749,7 +750,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   <div class="create-dialog-content"><p id="axureReadinessSummary" class="hint"></p>
     <p class="hint">评估结果仅用于识别页面、控件和交互风险；并非原生 Axure .rp 文件。可编辑 .rp 导出仍需原生编译器验证。</p>
     <pre id="axureReadinessJson" style="white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;background:var(--panel2);padding:14px;border:1px solid var(--border);border-radius:10px;font-size:12px"></pre>
-    <div class="row"><button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button><button type="button" id="downloadAxureIrBtn" class="ghost">下载可编辑控件映射 JSON</button><button type="button" id="downloadRp1SourceBtn" class="ghost">下载 Zee-RP RP/1 源文件</button></div>
+    <div class="row"><button type="button" id="copyAxureReadinessBtn" class="ghost">复制 JSON 报告</button><button type="button" id="downloadAxureIrBtn" class="ghost">下载可编辑控件映射 JSON</button><button type="button" id="downloadRp1SourceBtn" class="ghost">下载 Zee-RP RP/1 源文件</button><button type="button" id="nativeRpExportBtn" class="ghost hidden">生成 Axure .rp（RP9）</button></div><p id="nativeRpExportStatus" class="hint" aria-live="polite"></p>
     <p class="hint">RP/1 源文件可交给已安装的 Zee-RP 编译器处理，但它当前以 Axure RP9 为编译目标；JSON 源文件不是 .rp，尚未通过 Axure RP11 宿主验收。</p>
   </div>
 </dialog>
@@ -3118,6 +3119,61 @@ $("downloadAxureIrBtn").addEventListener("click", async () => {
   }
 });
 
+
+// RC23: a real .rp download is available ONLY after isolated Zee-RP
+// check / generate / decompile and on-disk SHA validation. Never rename JSON.
+$("nativeRpExportBtn").classList.toggle("hidden",!window.__ARCU_NATIVE_RP_EXPORT__);
+$("nativeRpExportBtn").addEventListener("click", async () => {
+  if(!selected||!window.__ARCU_NATIVE_RP_EXPORT__)return;
+  const id=selected.id;
+  const version=selectedVersion||selected.currentVersion;
+  const btn=$("nativeRpExportBtn");
+  if(btn.disabled)return;
+  const status=$("nativeRpExportStatus");
+  setBusy(btn,true,"正在生成原生 .rp…");
+  status.textContent="正在解析页面和控件，准备独立编译任务…";
+  try {
+    const job=await api("/api/projects/"+id+"/native-rp-export",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({version})
+    });
+    const url="/api/projects/"+id+"/native-rp-export/"+job.id;
+    let state=job;
+    for(let i=0;i<280;i++) {
+      if(state.status==="completed"||state.status==="failed")break;
+      status.textContent=state.status==="queued"
+        ? "任务已排队，等待独立 Zee-RP 编译服务…"
+        : "Zee-RP 正在生成并结构校验 .rp；请不要关闭当前弹窗…";
+      await new Promise(resolve=>setTimeout(resolve,3000));
+      state=await api(url);
+    }
+    if(state.status!=="completed") {
+      if(state.status==="failed")throw new Error(state.error+" ["+state.errorCode+"]");
+      throw new Error("编译任务仍在进行中；任务ID："+job.id);
+    }
+    status.textContent="原生 RP9 编译及读回校验成功，正在下载…";
+    const headers=token?{Authorization:"Bearer "+token}:{};
+    const res=await fetch(url+"/download",{headers,credentials:"same-origin"});
+    if(!res.ok) {
+      const error=await res.json().catch(()=>({}));
+      throw new Error(error.error||"下载 HTTP "+res.status);
+    }
+    const blob=await res.blob();
+    if(blob.size<128||blob.type.includes("json"))
+      throw new Error("返回内容不是已验证的 Axure .rp 二进制");
+    const href=URL.createObjectURL(blob);
+    try {
+      const a=document.createElement("a");a.href=href;
+      a.download="arcunara-"+id+"-v"+version+"-rp9.rp";
+      document.body.appendChild(a);a.click();a.remove();
+    } finally {setTimeout(()=>URL.revokeObjectURL(href),1500);}
+    status.textContent="下载完成。RP9 结构读回已通过；请在 Axure RP11 中验证打开、编辑和保存。控件可能降级："+state.warningCount+" 项警告。";
+    feedback("原生 Axure .rp 已下载（RP9 目标，RP11 尚待验证）",true);
+  } catch(err) {
+    status.textContent="生成失败："+friendlyError(err)+"。如提示 IR_WIDGET_LIMIT，表示页面控件超过当前转换上限，并非下载按钮故障。";
+    feedback(status.textContent,false);
+  } finally {setBusy(btn,false);}
+});
 
 $("downloadRp1SourceBtn").addEventListener("click", async () => {
   if (!selected) return;
