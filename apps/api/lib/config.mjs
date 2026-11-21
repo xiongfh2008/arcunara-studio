@@ -228,6 +228,15 @@ export function loadConfig(env = process.env) {
     throw new Error("AI generation needs absolute ARCU_AI_API_KEY_FILE");
   }
 
+  // RC23: website native RP9 export is disabled unless an isolated offline
+  // Zee-RP worker with a legitimate user-provided RP9 template is deployed.
+  // This flag only permits authenticated job enqueue/download; API process
+  // never invokes compilers or uploaded code. RP11 validation remains manual.
+  const rpFlag=env.ARCU_NATIVE_RP_EXPORT_ENABLED||"0";
+  if(!["0","1"].includes(rpFlag))
+    throw new Error("ARCU_NATIVE_RP_EXPORT_ENABLED must be 0 or 1");
+  const nativeRpExportEnabled=rpFlag==="1";
+
   // RC13: independent public static-site listener. Explicitly opt in and
   // route each project through a distinct UUID subdomain. Never reuse the
   // platform/admin/preview hostname, even though sites are public content.
@@ -280,6 +289,7 @@ export function loadConfig(env = process.env) {
     memberPublicOrigin,
     aiGenerationEnabled,
     aiApiKeyFile,
+    nativeRpExportEnabled,
     stagingPublicPreview,
     axureNativeOrigin,
     siteHostingEnabled,
