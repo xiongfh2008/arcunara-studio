@@ -158,7 +158,9 @@ export function createNativeRpJobs(config,store) {
     if(!stat||!stat.isFile()||stat.isSymbolicLink()||
        stat.size<128||stat.size>MAX_RP||stat.size!==state.outputBytes)
       fail(409,"Verified RP artifact missing or invalid","RP_ARTIFACT_INVALID");
-    const hash=crypto.createHash("sha256").update(await fs.readFile(file)).digest("hex");
+    const hasher=crypto.createHash("sha256");
+    for await (const chunk of createReadStream(file)) hasher.update(chunk);
+    const hash=hasher.digest("hex");
     if(hash!==state.outputSha256)
       fail(409,"RP artifact checksum mismatch","RP_ARTIFACT_INVALID");
     const name=`arcunara-${projectId}-v${request.version}-rp9.rp`;
