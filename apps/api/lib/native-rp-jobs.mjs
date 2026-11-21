@@ -169,7 +169,7 @@ export function createNativeRpJobs(config,store) {
       "Content-Disposition":`attachment; filename="${name}"`,
       "Cache-Control":"no-store","X-Content-Type-Options":"nosniff",
       "Referrer-Policy":"no-referrer"});
-    createReadStream(file).pipe(res);
+    createReadStream(file).on("error",()=>res.destroy()).pipe(res);
   }
   return {enqueue,get,download};
 }
